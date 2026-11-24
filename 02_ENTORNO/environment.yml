@@ -1,0 +1,19 @@
+name: g4g-ml
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - geopandas
+  - shapely
+  - pyproj
+  - rasterio
+  - scikit-learn
+  - lightgbm
+  - matplotlib
+  - jupyterlab
+  - pystac-client
+  - planetary-computer
+  - stackstac
+  - openpyxl
