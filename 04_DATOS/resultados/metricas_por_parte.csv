@@ -1,0 +1,9 @@
+prueba,n,positivos,precision,recall,f1,ap,verdaderos_pos,falsos_pos,falsos_neg,verdaderos_neg,zona_examen
+bloques de 5 km parte 1,7974,987,0.431,0.584,0.496,0.425,576,759,411,6228,"[np.int64(113649), np.int64(113650), np.int64(113654), np.int64(113658)]"
+bloques de 5 km parte 2,7974,400,0.138,0.863,0.238,0.184,345,2160,55,5414,"[np.int64(113652), np.int64(113655), np.int64(113665), np.int64(113667)]"
+bloques de 5 km parte 3,7974,800,0.362,0.496,0.419,0.393,397,699,403,6475,"[np.int64(113651), np.int64(113656), np.int64(113657), np.int64(113661)]"
+bloques de 5 km parte 4,7973,800,0.349,0.816,0.489,0.483,653,1216,147,5957,"[np.int64(113648), np.int64(113659), np.int64(113664), np.int64(113666)]"
+bloques de 5 km parte 5,7973,400,0.244,0.855,0.379,0.257,342,1062,58,6511,"[np.int64(113653), np.int64(113662), np.int64(114648), np.int64(114649)]"
+pueblo afuera parte 1,4474,1387,0.491,0.562,0.524,0.422,779,806,608,2281,['Tipuani']
+pueblo afuera parte 2,8840,1600,0.363,0.549,0.437,0.362,878,1538,722,5702,['Mapiri']
+pueblo afuera parte 4,4117,400,0.279,0.84,0.418,0.434,336,870,64,2847,['Guanay']

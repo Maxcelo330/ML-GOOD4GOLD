@@ -25,6 +25,7 @@ Como probarlo desde la consola (entorno g4g-ml):
 import hashlib
 import json
 import math
+import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -68,6 +69,7 @@ NOTA = ("Puntaje relativo del modelo, no es una probabilidad. Posible actividad 
         "aun no consultado): no indica legalidad ni presencia de mercurio. Puede incluir suelo desnudo, arena de rio "
         "o derrumbes que no son mineria. Es una lista para revisar, no una deteccion confirmada.")
 
+UMBRALES = {"normal": 0.5, "alta": 0.3}
 ETAPAS = ["Buscando imagenes satelitales", "Descargando la imagen del bloque", "Calculando indices y pendiente",
           "Corriendo el modelo", "Filtrando y trazando zonas", "Midiendo distancias a rios y poblados"]
 
@@ -360,12 +362,18 @@ def distancias(gdf, g, bbox):
 
 
 # ------------------------------------------------------------------ flujo completo
-def analizar(bbox, progreso=lambda etapa, frac, msg: None, usar_cache=True):
-    """Analiza un bloque (lon_oeste, lat_sur, lon_este, lat_norte). Devuelve un dict listo para el visor."""
+def analizar(bbox, progreso=lambda etapa, frac, msg: None, usar_cache=True, sensibilidad="normal"):
+    """Analiza un bloque (lon_oeste, lat_sur, lon_este, lat_norte). Devuelve un dict listo para el visor.
+
+    sensibilidad: "normal" (puntaje minimo 0.5, como la lista del piloto) o "alta" (0.3: marca mas terreno, con mas falsos positivos).
+    """
+    if sensibilidad not in UMBRALES:
+        raise ErrorAnalisis("Sensibilidad no valida.")
+    umbral = UMBRALES[sensibilidad]
     t0 = time.time()
     bbox = validar_bbox(bbox)
     SALIDA.mkdir(parents=True, exist_ok=True)
-    clave = hashlib.sha1(json.dumps([round(v, 4) for v in bbox]).encode()).hexdigest()[:12]
+    clave = hashlib.sha1(json.dumps([[round(v, 4) for v in bbox], sensibilidad]).encode()).hexdigest()[:12]
     ruta_cache = SALIDA / f"{clave}.json"
     if usar_cache and ruta_cache.exists():
         r = json.loads(ruta_cache.read_text(encoding="utf-8"))
@@ -379,7 +387,9 @@ def analizar(bbox, progreso=lambda etapa, frac, msg: None, usar_cache=True):
     epsg, items = buscar_escenas(bbox_pad, progreso)
     g = Grilla(epsg, bbox_pad)
     n_tiles = len({i.properties["s2:mgrs_tile"] for i in items})
-    escenas = elegir(items, box(*bbox_pad), 6 if n_tiles <= 2 else 4)
+    # La regla de zonas pide mediana de 7+ fotos validas por pixel (nucleo_zonas.MIN_OBS_MEDIANA): hacen falta bastantes escenas
+    # (como en el piloto, que usa 12 por tile). Con menos, todas las zonas se descartarian por 'pocas fotos'.
+    escenas = elegir(items, box(*bbox_pad), 12 if n_tiles <= 1 else 8 if n_tiles == 2 else 5)
     if not escenas:
         raise ErrorAnalisis("No se encontraron imagenes que cubran el bloque.")
     progreso(0, 1.0, f"{len(escenas)} imagenes elegidas de {len(items)} disponibles")
@@ -404,12 +414,27 @@ def analizar(bbox, progreso=lambda etapa, frac, msg: None, usar_cache=True):
     acp = acp[acp.intersects(g.region)]
     excluir = rasterize([(x, 1) for x in ent.geometry], out_shape=prob.shape, transform=g.T, fill=0, dtype="uint8").astype(bool) if len(ent) else None
     aceptadas = rasterize([(x, 1) for x in acp.geometry], out_shape=prob.shape, transform=g.T, fill=0, dtype="uint8").astype(bool) if len(acp) else None
-    gdf, info = nz.extraer_zonas(prob, ndvi, ndwi, n_obs.astype("float32"), g.T, g.crs, excluir=excluir, aceptadas=aceptadas)
+    # Dentro del piloto: las mismas reglas estrictas de la lista. Fuera: las reglas de fotos y de entorno solo MARCAN la zona
+    # (confianza "parcial"), porque fueron pensadas para el bosque del norte de La Paz y en otros lugares borrarian
+    # areas mineras reales (por ejemplo, el interior de una gran area minera no esta "rodeado de bosque").
+    aoi = gpd.read_file(RAIZ / "04_DATOS" / "zona_piloto.gpkg", layer="aoi_wgs84").geometry.union_all()
+    b_wgs = box(*bbox)
+    frac_piloto = float(b_wgs.intersection(aoi).area / b_wgs.area)
+    estricto = frac_piloto >= 0.5
+    gdf, info = nz.extraer_zonas(prob, ndvi, ndwi, n_obs.astype("float32"), g.T, g.crs, excluir=excluir, aceptadas=aceptadas,
+                                 estricto=estricto, unir_px=0 if estricto else 3, umbral=umbral)
+    info["modo"] = "estricto (zona piloto)" if estricto else "relajado (fuera del piloto: reglas marcadas, no eliminadas)"
+    if os.environ.get("G4G_DEBUG"):   # solo para revisar un bloque a mano (guarda las capas calculadas)
+        np.savez_compressed(SALIDA / f"{clave}_debug.npz", bandas=bandas, ndvi=ndvi, ndwi=ndwi, n_obs=n_obs, prob=prob, pend=pend, T=np.array(g.T)[:6])
 
-    # Solo las zonas cuyo centro cae dentro del bloque dibujado (el margen de 1 km es solo contexto)
+    # Solo lo que cae dentro del bloque dibujado: las zonas que cruzan el borde se RECORTAN (el margen de 1 km es solo contexto)
     caja = gpd.GeoSeries([box(*bbox)], crs=4326).to_crs(g.crs).iloc[0]
     if len(gdf):
-        gdf = gdf[gdf.geometry.representative_point().within(caja)]
+        gdf = gdf[gdf.intersects(caja)].copy()
+        gdf["geometry"] = gdf.geometry.intersection(caja)
+        gdf = gdf[~gdf.geometry.is_empty]
+        gdf["area_ha"] = (gdf.geometry.area / 10_000).round(1)
+        gdf = gdf[gdf.area_ha >= nz.MIN_HA]          # un recorte de menos de 5 ha ya no es una zona
         gdf = gdf.sort_values("puntaje", ascending=False).head(MAX_ZONAS).reset_index(drop=True)
     progreso(4, 1.0, f"{len(gdf)} zonas")
 
@@ -426,15 +451,15 @@ def analizar(bbox, progreso=lambda etapa, frac, msg: None, usar_cache=True):
     for i, (fila, w) in enumerate(zip(gdf.itertuples(), wgs.geometry)):
         rp = w.representative_point()
         feats.append({"type": "Feature", "geometry": mapping(w),
-                      "properties": {"id": f"AN-{i + 1:03d}", "area_ha": float(fila.area_ha), "puntaje_modelo": int(round(fila.puntaje * 100)),
+                      "properties": {"id": f"B{clave[:4]}-{i + 1:03d}", "area_ha": float(fila.area_ha), "puntaje_modelo": int(round(fila.puntaje * 100)),
                                      "dist_rio_m": dist[0][i] if dist else None, "dist_poblado_m": dist[1][i] if dist else None,
                                      "poblado_cercano": dist[2][i] if dist else "", "lat": round(rp.y, 6), "lng": round(rp.x, 6),
                                      "ndvi_mediano": float(fila.ndvi_mediano), "obs_mediana": float(fila.obs_mediana),
+                                     "confianza": "completa" if (fila.fotos_ok and fila.entorno_ok) else "parcial",
+                                     "avisos_zona": ([] if fila.fotos_ok else [f"Pocas fotos limpias (mediana {fila.obs_mediana:g} de 7 recomendadas): puede haber restos de nube o sombra."])
+                                                    + ([] if fila.entorno_ok else [f"El entorno tiene poca vegetacion (NDVI {fila.ndvi_entorno:g}): puede ser el interior de una gran area minera, o roca y suelo natural. Compara con la imagen."]),
                                      "estado_verificacion": "por verificar en campo; registro AJAM aun no consultado",
                                      "nota": NOTA}})
-    aoi = gpd.read_file(RAIZ / "04_DATOS" / "zona_piloto.gpkg", layer="aoi_wgs84").geometry.union_all()
-    b = box(*bbox)
-    frac_piloto = float(b.intersection(aoi).area / b.area)
     ancho_km, alto_km = _km(bbox)
     ha = round(float(sum(f["properties"]["area_ha"] for f in feats)), 1)
     avisos = []
@@ -445,20 +470,28 @@ def analizar(bbox, progreso=lambda etapa, frac, msg: None, usar_cache=True):
         avisos.append(f"Solo {cobertura * 100:.0f}% del bloque tiene imagen utilizable (nubes o sin datos): el resultado esta incompleto.")
     if len(usadas) < 3:
         avisos.append("Se usaron pocas imagenes; el resultado puede tener restos de nube.")
+    if sensibilidad == "alta":
+        avisos.append("Sensibilidad alta: marca mas terreno removido, pero tambien mas falsos positivos. Revisa cada zona.")
+    if info.get("zonas_5ha", 0) > 0 and info.get("zonas_finales", 0) == 0:
+        avisos.append(f"El modelo marco {info['zonas_5ha']} manchas de mas de 5 ha, pero los filtros contra falsos positivos las descartaron "
+                      f"todas (fotos validas, vegetacion del entorno o color). Este lugar es distinto al de entrenamiento y los filtros "
+                      f"pueden estar siendo demasiado estrictos para este tipo de terreno.")
     if dist is None and len(feats):
         avisos.append("No se pudieron calcular las distancias a rios y poblados (sin conexion al servicio de OpenStreetMap).")
     if len(feats) == 0:
         veredicto = "No se encontraron zonas con parecido a actividad minera en este bloque, con la imagen de mayo a septiembre de 2026."
     else:
-        veredicto = (f"Se encontraron {len(feats)} zonas con parecido a posible actividad minera ({ha} ha en total). "
-                     "Son zonas para revisar, no detecciones confirmadas.")
+        parc = sum(1 for f in feats if f["properties"]["confianza"] == "parcial")
+        veredicto = (f"Se encontraron {len(feats)} zonas con parecido a posible actividad minera ({ha} ha en total)"
+                     + (f"; {parc} con confianza parcial (ver avisos de cada zona)" if parc else "")
+                     + ". Son zonas para revisar, no detecciones confirmadas.")
     resultado = {
         "bbox": list(bbox),
         "zonas": {"type": "FeatureCollection", "features": feats},
         "resumen": {"veredicto": veredicto, "n_zonas": len(feats), "area_total_ha": ha, "bloque_km": [round(ancho_km, 1), round(alto_km, 1)],
                     "bloque_km2": round(ancho_km * alto_km, 1), "cobertura_imagen_pct": round(cobertura * 100),
                     "dentro_zona_entrenamiento_pct": round(frac_piloto * 100), "imagenes_usadas": usadas,
-                    "pixeles_puntuados": int(valido.sum()), "filtros": info, "epsg": epsg,
+                    "pixeles_puntuados": int(valido.sum()), "filtros": info, "modo": info["modo"], "sensibilidad": sensibilidad, "umbral": umbral, "epsg": epsg,
                     "segundos": round(time.time() - t0, 1), "periodo": PERIODO, "avisos": avisos, "desde_cache": False},
     }
     ruta_cache.write_text(json.dumps(resultado, ensure_ascii=False), encoding="utf-8")
@@ -466,9 +499,10 @@ def analizar(bbox, progreso=lambda etapa, frac, msg: None, usar_cache=True):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 5:
+    if len(sys.argv) not in (5, 6):
         raise SystemExit(__doc__)
-    r = analizar([float(v) for v in sys.argv[1:5]], lambda e, f, m: print(f"  [{ETAPAS[e]}] {f * 100:3.0f}% {m}", flush=True), usar_cache=False)
+    sens = sys.argv[5] if len(sys.argv) > 5 else "normal"
+    r = analizar([float(v) for v in sys.argv[1:5]], lambda e, f, m: print(f"  [{ETAPAS[e]}] {f * 100:3.0f}% {m}", flush=True), usar_cache=False, sensibilidad=sens)
     print(json.dumps(r["resumen"], indent=2, ensure_ascii=False))
     for f in r["zonas"]["features"]:
         p = f["properties"]

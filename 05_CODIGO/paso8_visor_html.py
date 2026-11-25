@@ -28,7 +28,9 @@ import geopandas as gpd
 RAIZ = Path(__file__).resolve().parents[1]
 SALIDA = RAIZ / "07_VISOR" / "visor.html"
 
-zonas = gpd.read_file(RAIZ / "04_DATOS" / "resultados" / "detecciones.geojson")
+GEOJSON = RAIZ / "04_DATOS" / "resultados" / "detecciones.geojson"
+# La lista del piloto no se versiona en git: si falta (por ejemplo en otro equipo), el visor igual sirve para analizar bloques.
+zonas = gpd.read_file(GEOJSON) if GEOJSON.exists() else None
 ref = RAIZ / "04_DATOS" / "referencia" / "rios_y_poblados.gpkg"
 cauces = gpd.read_file(ref, layer="cauces").to_crs("EPSG:32719")
 lugares = gpd.read_file(ref, layer="poblados_osm")
@@ -44,7 +46,7 @@ lug_js = [{"n": r.nombre, "t": r.tipo, "p": [round(r.geometry.y, 5), round(r.geo
 
 cols = ["id", "nombre", "tipo", "origen", "area_ha", "puntaje_modelo", "prioridad", "zona_cercana", "estado_verificacion",
         "dist_rio_m", "dist_poblado_m", "poblado_cercano", "actualizado", "deteccion", "nota", "lat", "lng"]
-zonas_js = json.loads(zonas[cols + ["geometry"]].to_json())
+zonas_js = json.loads(zonas[cols + ["geometry"]].to_json()) if zonas is not None else {"type": "FeatureCollection", "features": []}
 
 plantilla = (RAIZ / "05_CODIGO" / "visor_plantilla.html").read_text(encoding="utf-8")
 html = (plantilla.replace("__ZONAS__", json.dumps(zonas_js, ensure_ascii=False, separators=(",", ":")))
@@ -52,4 +54,4 @@ html = (plantilla.replace("__ZONAS__", json.dumps(zonas_js, ensure_ascii=False, 
         .replace("__LUGARES__", json.dumps(lug_js, ensure_ascii=False, separators=(",", ":"))))
 SALIDA.parent.mkdir(parents=True, exist_ok=True)
 SALIDA.write_text(html, encoding="utf-8")
-print(f"Guardado {SALIDA} ({SALIDA.stat().st_size / 1e3:.0f} KB): {len(zonas)} zonas, {len(rios_js)} cauces, {len(lug_js)} poblados con nombre")
+print(f"Guardado {SALIDA} ({SALIDA.stat().st_size / 1e3:.0f} KB): {len(zonas_js['features'])} zonas del piloto, {len(rios_js)} cauces, {len(lug_js)} poblados con nombre")

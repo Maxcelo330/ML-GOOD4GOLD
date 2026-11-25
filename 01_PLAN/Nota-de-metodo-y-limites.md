@@ -58,6 +58,19 @@ Se aplicaron tras la segunda revisión independiente (25-nov):
 
 Las 13 zonas de lectura visual (LV) son ejemplos de entrenamiento, sin puntaje, rotuladas "sin verificar". Dos miden más de 1.000 ha y probablemente agrupan varias áreas.
 
+## 5b. Análisis de bloques en cualquier lugar (visor con servidor local)
+El visor permite dibujar un bloque (hasta 12 × 12 km) en cualquier lugar. El programa baja la imagen Sentinel-2 de ese bloque (mayo a septiembre 2026), calcula los mismos índices y la pendiente, corre el modelo guardado (`modelo_lgbm.txt`) y aplica los mismos filtros de la sección 5 (`nucleo_zonas.py`).
+
+> [!warning] Fuera del norte de La Paz el modelo NO está validado
+> Se entrenó y se midió solo en Tipuani, Mapiri, Teoponte y Guanay. En otras regiones (por ejemplo la selva baja de Madre de Dios, con pozas grandes y terreno plano) no sabemos cuánto acierta, y la pendiente como atajo (sección 4) hace que encuentre mal la minería en terreno plano. Un resultado ahí solo sirve como **demostración de la herramienta**, no como evidencia de minería.
+
+- Comprobación hecha: en un bloque de Tipuani el análisis encontró la zona conocida (75,6 ha, puntaje 72) frente a la lista del piloto (78,6 ha, puntaje 73), con imágenes bajadas de nuevo. La diferencia viene de elegir fotos distintas para la mediana.
+- El modelo guardado se reentrenó con la misma semilla y dio métricas y mapa idénticos al original.
+- **Prueba fuera del piloto (La Pampa, Madre de Dios, bloque de 9,8 × 8,8 km, 25-nov-2026):** hay unas 6.100 ha de terreno sin vegetación (prácticamente todo minería). Con sensibilidad normal el modelo marca 1.271 ha (17 % de ese terreno); con sensibilidad alta, entre 2.750 y 3.100 ha (36 a 39 %), a costa de más marcas fuera de ese terreno (~19 %). **Detecta zonas reales dentro de la minería pero deja sin marcar buena parte; la cobertura es baja fuera de donde se entrenó.** Se compara contra "terreno sin vegetación", no contra una verdad de campo.
+- Dos reglas del piloto (mediana de 7+ fotos limpias y "entorno con vegetación") eliminaban casi todo en la selva baja (nublada y con minas enormes). Fuera del piloto ahora solo **marcan** la zona como "confianza parcial" y el visor lo avisa; dentro del piloto siguen eliminando, y la lista del piloto no cambió (CSV idéntico). En el modo relajado también se unen pedazos separados por menos de unos 120 m.
+- La sensibilidad alta (puntaje mínimo 0,3 en vez de 0,5) es una opción de quien analiza, con el costo explicado en el visor.
+- Lo que el visor dice: "zonas con parecido a posible actividad minera (por verificar; registro AJAM aún no consultado)". Nunca "hay minería" ni "ilegal".
+
 ## 6. Reproducibilidad
 - Semilla fija (42), versiones y fechas en `04_DATOS/resultados/modelo_info.json` y `04_DATOS/imagenes/compuesto/metadata.json`.
 - `05_CODIGO/paso3f_agregar_errores_modelo.py` **no se puede volver a correr desde cero** (usa posiciones de un ranking que ya cambió). Queda como registro; el resultado está en `04_DATOS/etiquetas/candidatos.gpkg`.

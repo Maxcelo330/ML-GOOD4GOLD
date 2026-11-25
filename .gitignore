@@ -1,6 +1,6 @@
 # Datos pesados (rasters, imagenes, resultados): se regeneran con el pipeline
 04_DATOS/imagenes/
-04_DATOS/resultados/
+04_DATOS/resultados/*
 *.tif
 *.tiff
 *.vrt
@@ -11,6 +11,14 @@
 # Conserva los vectores pequenos clave (AOI y etiquetas)
 !04_DATOS/zona_piloto.gpkg
 !04_DATOS/etiquetas/*.gpkg
+
+# Del resultado se conservan el MODELO guardado (530 KB) y las metricas: bastan para analizar bloques desde otro equipo.
+# La lista de zonas del piloto (detecciones*) NO se versiona: son zonas sin verificar y el repo es publico (D-002).
+!04_DATOS/resultados/modelo_lgbm.txt
+!04_DATOS/resultados/modelo_info.json
+!04_DATOS/resultados/metricas.csv
+!04_DATOS/resultados/metricas_por_parte.csv
+!04_DATOS/resultados/importancia_variables.csv
 
 # Archivos temporales de QGIS y GeoPackage
 *.gpkg-shm

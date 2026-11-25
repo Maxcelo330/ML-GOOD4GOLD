@@ -3,59 +3,100 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Zonas para revisar - norte de La Paz (uso interno)</title>
+<title>Zonas de posible actividad minera (uso interno)</title>
 <link rel="stylesheet" href="lib/leaflet/leaflet.css">
 <style>
-  :root { --borde:#d5d9e0; --fondo:#f6f7f9; --texto:#1d2330; --suave:#5d6677; --acento:#b4540a; }
+  :root { --borde:#d5d9e0; --fondo:#f6f7f9; --texto:#1d2330; --suave:#5d6677; --acento:#5f3dc4; --acento-suave:#ece8fb; --naranja:#e8590c; }
   * { box-sizing: border-box; }
   html, body { height:100%; margin:0; font:14px/1.4 system-ui, "Segoe UI", sans-serif; color:var(--texto); }
   #app { display:flex; height:100%; }
-  #panel { width:360px; max-width:42vw; display:flex; flex-direction:column; background:var(--fondo); border-right:1px solid var(--borde); }
-  #mapa { flex:1; }
+  #panel { width:360px; max-width:42vw; display:flex; flex-direction:column; background:var(--fondo); border-right:1px solid var(--borde); z-index:2; }
+  #mapa { flex:1; position:relative; }
   header { padding:12px 14px 8px; border-bottom:1px solid var(--borde); background:#fff; }
   h1 { font-size:16px; margin:0 0 4px; }
   .aviso { font-size:12px; background:#fff4e0; border:1px solid #f0c987; border-radius:6px; padding:6px 8px; color:#6b4200; }
   .bloque { padding:8px 14px; border-bottom:1px solid var(--borde); }
   .bloque label { display:inline-flex; align-items:center; gap:4px; margin-right:10px; font-size:13px; }
-  select, textarea, button { font:inherit; }
-  select, textarea { width:100%; border:1px solid var(--borde); border-radius:6px; padding:5px 6px; background:#fff; }
+  select, textarea, button, input[type=text] { font:inherit; }
+  select, textarea, input[type=text] { width:100%; border:1px solid var(--borde); border-radius:6px; padding:5px 6px; background:#fff; }
   textarea { resize:vertical; min-height:54px; }
-  button { border:1px solid var(--borde); background:#fff; border-radius:6px; padding:5px 9px; cursor:pointer; }
-  button:hover { background:#eef1f5; }
+  button { border:1px solid var(--borde); background:#fff; border-radius:6px; padding:5px 9px; cursor:pointer; transition:background .15s, transform .1s; }
+  button:hover { background:#eef1f5; } button:active { transform:scale(.97); }
+  button.primario { background:var(--acento); border-color:var(--acento); color:#fff; font-weight:600; }
+  button.primario:hover { background:#4c2fa3; } button:disabled { opacity:.45; cursor:not-allowed; }
   #lista { flex:1; overflow:auto; min-height:120px; }
   .fila { display:flex; align-items:center; gap:8px; padding:7px 14px; border-bottom:1px solid #e8ebf0; cursor:pointer; background:#fff; }
-  .fila:hover { background:#f0f3f8; }
-  .fila.activa { background:#fde9d4; }
-  .fila .id { font-weight:600; width:58px; }
-  .fila .meta { color:var(--suave); font-size:12px; flex:1; }
+  .fila:hover { background:#f0f3f8; } .fila.activa { background:#fde9d4; }
+  .fila .id { font-weight:600; min-width:62px; } .fila .meta { color:var(--suave); font-size:12px; flex:1; }
   .pt { width:10px; height:10px; border-radius:50%; flex:none; }
   .estado { font-size:11px; padding:1px 6px; border-radius:10px; background:#e8ebf0; white-space:nowrap; }
   #ficha { max-height:46%; overflow:auto; background:#fff; border-top:2px solid var(--borde); padding:10px 14px; display:none; }
   #ficha h2 { font-size:15px; margin:0 0 4px; }
   #ficha dl { display:grid; grid-template-columns:auto 1fr; gap:2px 10px; margin:6px 0; font-size:13px; }
-  #ficha dt { color:var(--suave); }
-  #ficha dd { margin:0; }
+  #ficha dt { color:var(--suave); } #ficha dd { margin:0; }
   .nota { font-size:12px; color:var(--suave); margin:6px 0; }
   .pie { display:flex; gap:6px; padding:8px 14px; flex-wrap:wrap; background:#fff; border-top:1px solid var(--borde); }
   .lbl { background:rgba(255,255,255,.85); border:none; box-shadow:none; font-size:11px; padding:0 3px; color:#222; }
   .z-lejos .lbl { display:none; }
-  /* El boton de capas de fondo no trae iconos en la copia local de Leaflet: se reemplaza por texto */
   .leaflet-control-layers-toggle { background-image:none !important; width:auto !important; height:auto !important; }
   .leaflet-control-layers-toggle::after { content:"Fondo del mapa"; display:block; padding:6px 10px; font-size:13px; color:#222; }
-  @media (max-width:760px) { #app { flex-direction:column-reverse; } #panel { width:100%; max-width:none; height:55%; } }
+
+  /* ---- Tarjeta flotante del analisis (sobre el mapa) */
+  #tarjeta { position:absolute; top:12px; left:54px; width:330px; max-width:calc(100% - 200px); z-index:1000; background:rgba(255,255,255,.97);
+    border:1px solid var(--borde); border-radius:12px; box-shadow:0 8px 28px rgba(20,24,40,.22); padding:14px; animation:sube .3s ease; }
+  @keyframes sube { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+  #tarjeta h3 { margin:0 0 6px; font-size:15px; } #tarjeta p { margin:4px 0; font-size:13px; color:var(--suave); }
+  #tarjeta .fila-b { display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; }
+  .buscar { display:flex; gap:6px; margin:8px 0; }
+  .medida { font-weight:600; font-size:15px; } .medida.mal { color:#c92a2a; } .medida.bien { color:#2b8a3e; }
+  /* etapas con avance real */
+  .etapas { list-style:none; margin:10px 0 6px; padding:0; }
+  .etapas li { display:flex; align-items:center; gap:9px; padding:4px 0; font-size:13px; color:#98a0ae; transition:color .3s; }
+  .etapas li.activa { color:var(--texto); font-weight:600; } .etapas li.hecha { color:#2b8a3e; }
+  .ico { width:18px; height:18px; border-radius:50%; border:2px solid #cfd4dc; flex:none; display:grid; place-items:center; font-size:11px; transition:all .3s; }
+  li.activa .ico { border-color:var(--acento); border-top-color:transparent; animation:gira .8s linear infinite; }
+  li.hecha .ico { background:#2b8a3e; border-color:#2b8a3e; color:#fff; animation:none; } li.hecha .ico::after { content:"\2713"; }
+  @keyframes gira { to { transform:rotate(360deg); } }
+  .barra { height:8px; border-radius:6px; background:#e7e9ee; overflow:hidden; margin-top:8px; }
+  .barra > i { display:block; height:100%; width:0; background:linear-gradient(90deg,#7048e8,#9775fa,#7048e8); background-size:200% 100%;
+    animation:brilla 1.4s linear infinite; transition:width .5s ease; }
+  @keyframes brilla { to { background-position:-200% 0; } }
+  .msg { font-size:12px; color:var(--suave); min-height:18px; margin-top:4px; }
+  /* resultado */
+  .grande { display:flex; gap:16px; margin:10px 0 4px; }
+  .grande div { flex:1; background:var(--acento-suave); border-radius:10px; padding:8px 10px; text-align:center; }
+  .grande b { display:block; font-size:26px; color:var(--acento); line-height:1.1; } .grande span { font-size:11px; color:var(--suave); }
+  .datos { display:grid; grid-template-columns:1fr 1fr; gap:3px 10px; font-size:12px; color:var(--suave); margin:8px 0; }
+  .alerta { background:#fff4e0; border:1px solid #f0c987; color:#6b4200; border-radius:8px; padding:6px 8px; font-size:12px; margin:6px 0; }
+  .error { background:#ffe3e3; border:1px solid #ffa8a8; color:#8a1c1c; border-radius:8px; padding:8px; font-size:13px; }
+  /* animaciones sobre el mapa */
+  .escaneando { stroke-dasharray:10 8; animation:marcha 1s linear infinite, pulso 1.6s ease-in-out infinite; }
+  @keyframes marcha { to { stroke-dashoffset:-18; } }
+  @keyframes pulso { 0%,100% { fill-opacity:.08; } 50% { fill-opacity:.28; } }
+  #barrido { position:absolute; z-index:650; pointer-events:none; overflow:hidden; display:none; border-radius:2px; }
+  #barrido::after { content:""; position:absolute; left:0; right:0; height:46px; top:0; background:linear-gradient(180deg,rgba(112,72,232,0),rgba(112,72,232,.45) 85%,rgba(190,170,255,.95));
+    animation:barrer 2s ease-in-out infinite; }
+  @keyframes barrer { 0% { top:-46px; } 100% { top:100%; } }
+  path.aparece { animation:entra .9s ease-out both; }
+  @keyframes entra { 0% { opacity:0; stroke-width:10; } 60% { opacity:1; } 100% { stroke-width:2; } }
+  .onda { width:16px; height:16px; margin:-8px 0 0 -8px; border-radius:50%; border:3px solid var(--acento); animation:onda 1.4s ease-out forwards; pointer-events:none; }
+  @keyframes onda { from { transform:scale(.4); opacity:1; } to { transform:scale(4.5); opacity:0; } }
+  @media (max-width:760px) { #app { flex-direction:column-reverse; } #panel { width:100%; max-width:none; height:50%; } #tarjeta { left:10px; top:10px; max-width:calc(100% - 20px); } }
+  @media (prefers-reduced-motion: reduce) { * { animation-duration:.01ms !important; animation-iteration-count:1 !important; } }
 </style>
 </head>
 <body>
 <div id="app">
   <aside id="panel">
     <header>
-      <h1>Zonas para revisar</h1>
+      <h1>Zonas de posible actividad minera</h1>
       <div class="aviso"><b>Lista para revisar, no detecciones confirmadas.</b> Posible actividad minera (por verificar; registro AJAM aún no consultado). La imagen no dice si es legal ni si hay mercurio. Uso interno.</div>
     </header>
     <div class="bloque">
-      <label><input type="checkbox" id="c-modelo" checked> Del modelo</label>
+      <label><input type="checkbox" id="c-modelo" checked> Piloto (modelo)</label>
       <label><input type="checkbox" id="c-lv" checked> Lectura visual</label><br>
-      <label><input type="checkbox" id="c-rios" checked> Ríos y quebradas</label>
+      <label><input type="checkbox" id="c-an" checked> Análisis de bloques</label>
+      <label><input type="checkbox" id="c-rios" checked> Ríos</label>
       <label><input type="checkbox" id="c-pob" checked> Poblados</label>
     </div>
     <div class="bloque">
@@ -73,7 +114,7 @@
       <button id="b-todo">Descargar lista completa (CSV)</button>
     </div>
   </aside>
-  <div id="mapa"></div>
+  <div id="mapa"><div id="tarjeta"></div><div id="barrido"></div></div>
 </div>
 
 <script src="lib/leaflet/leaflet.js"></script>
@@ -84,24 +125,25 @@ const LUGARES = __LUGARES__;
 const CLAVE = "g4g_revision_v1";
 const OPCIONES = ["Sin revisar", "Parece actividad minera", "No parece actividad minera", "No estoy seguro"];
 const COLOR = {"Sin revisar":"#e8590c", "Parece actividad minera":"#c92a2a", "No parece actividad minera":"#868e96", "No estoy seguro":"#f59f00"};
+const COLOR_AN = {"Sin revisar":"#7048e8"};   // las zonas del analisis de bloques sin revisar van en violeta
 let revision = {};
 try { revision = JSON.parse(localStorage.getItem(CLAVE) || "{}"); } catch (e) { revision = {}; }
 const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(revision)); } catch (e) {} };
 const estadoDe = id => (revision[id] && revision[id].estado) || "Sin revisar";
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const tipoDe = id => id.startsWith("LV") ? "lv" : id.startsWith("ML") ? "modelo" : "an";
+const colorDe = id => (tipoDe(id) === "an" && estadoDe(id) === "Sin revisar") ? COLOR_AN["Sin revisar"] : COLOR[estadoDe(id)];
 
 // ---- Mapa
 const esri = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
   {maxZoom: 18, attribution: "Imagen: Esri, Maxar, Earthstar Geographics"});
-const osm = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-  {maxZoom: 18, attribution: "&copy; colaboradores de OpenStreetMap"});
+const osm = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 18, attribution: "&copy; colaboradores de OpenStreetMap"});
 const mapa = L.map("mapa", {layers: [esri], zoomControl: true});
 L.control.layers({"Imagen satelital": esri, "Mapa de calles (OSM)": osm}, null, {position: "topright"}).addTo(mapa);
 L.control.scale({imperial: false}).addTo(mapa);
 mapa.getContainer().classList.add("z-lejos");
 mapa.on("zoomend", () => mapa.getContainer().classList.toggle("z-lejos", mapa.getZoom() < 12));
 
-// Rios y poblados (datos de OpenStreetMap, ODbL)
 const capaRios = L.layerGroup().addTo(mapa);
 RIOS.forEach(r => L.polyline(r.p, {color: r.t === "r" ? "#4dabf7" : "#74c0fc", weight: r.t === "r" ? 2 : 1, opacity: .85})
   .bindTooltip((r.n || (r.t === "r" ? "Río" : "Quebrada")), {sticky: true}).addTo(capaRios));
@@ -112,65 +154,71 @@ LUGARES.forEach(l => {
   m.addTo(capaPob);
 });
 
-// Zonas: contorno + punto (el punto ayuda a verlas cuando se aleja el mapa)
-const capaModelo = L.layerGroup().addTo(mapa), capaLV = L.layerGroup().addTo(mapa);
+// ---- Zonas (las del piloto y las que salgan de analizar un bloque)
+const grupos = {modelo: L.layerGroup().addTo(mapa), lv: L.layerGroup().addTo(mapa), an: L.layerGroup().addTo(mapa)};
+const TODAS = [];            // todas las zonas (features)
 const objetos = {};
-function estilo(f) { const c = COLOR[estadoDe(f.properties.id)]; const lv = f.properties.id.startsWith("LV");
-  return {color: c, weight: 2, fillColor: c, fillOpacity: lv ? .12 : .3, dashArray: lv ? "5 4" : null}; }
-ZONAS.features.forEach(f => {
-  const p = f.properties, grupo = p.id.startsWith("LV") ? capaLV : capaModelo;
-  const poli = L.geoJSON(f, {style: estilo}).addTo(grupo);
-  const punto = L.circleMarker([p.lat, p.lng], {radius: 8, weight: 2, color: "#fff", fillOpacity: .95}).addTo(grupo);
+function estilo(id) { const c = colorDe(id), lv = tipoDe(id) === "lv";
+  const parcial = (objetos[id] && objetos[id].p.confianza === "parcial");
+  return {color: c, weight: 2, fillColor: c, fillOpacity: lv ? .12 : .3, dashArray: (lv || parcial) ? "5 4" : null}; }
+function agregarZona(f, animar) {
+  const p = f.properties, t = tipoDe(p.id);
+  const poli = L.geoJSON(f, {style: () => estilo(p.id), className: animar ? "aparece" : ""}).addTo(grupos[t]);
+  const punto = L.circleMarker([p.lat, p.lng], {radius: 8, weight: 2, color: "#fff", fillOpacity: .95, fillColor: colorDe(p.id)}).addTo(grupos[t]);
   [poli, punto].forEach(o => o.on("click", () => elegir(p.id, false)));
   punto.bindTooltip(p.id);
-  objetos[p.id] = {poli, punto, p, grupo};
-});
-function pintar(id) { const o = objetos[id]; o.poli.setStyle(estilo({properties: o.p}));
-  o.punto.setStyle({fillColor: COLOR[estadoDe(id)]}); }
-Object.keys(objetos).forEach(pintar);
-const todos = L.featureGroup(Object.values(objetos).map(o => o.poli));
-mapa.fitBounds(todos.getBounds().pad(0.05));
+  objetos[p.id] = {poli, punto, p, grupo: grupos[t]}; TODAS.push(f);
+}
+function pintar(id) { const o = objetos[id]; o.poli.setStyle(estilo(id)); o.punto.setStyle({fillColor: colorDe(id)}); }
+ZONAS.features.forEach(f => agregarZona(f, false));
+// Vista de la zona piloto (si la lista del piloto no esta en este equipo, se usa el recuadro fijo)
+const vistaPiloto = TODAS.length ? L.featureGroup(Object.values(objetos).map(o => o.poli)).getBounds().pad(0.05)
+  : L.latLngBounds([[-15.9, -68.42], [-15.0, -67.2]]);
+mapa.fitBounds(vistaPiloto);
 
 // ---- Lista y filtros
 let activa = null;
 function visible(p) {
-  const lv = p.id.startsWith("LV");
-  if (lv && !document.getElementById("c-lv").checked) return false;
-  if (!lv && !document.getElementById("c-modelo").checked) return false;
+  const t = tipoDe(p.id);
+  if (!document.getElementById("c-" + (t === "modelo" ? "modelo" : t === "lv" ? "lv" : "an")).checked) return false;
   const f = document.getElementById("filtro").value, rev = estadoDe(p.id) !== "Sin revisar";
   return f === "todas" || (f === "sin" && !rev) || (f === "si" && rev);
 }
 function dibujarLista() {
-  const cont = document.getElementById("lista"); cont.innerHTML = "";
-  let n = 0;
-  ZONAS.features.forEach(f => {
+  const cont = document.getElementById("lista"); cont.innerHTML = ""; let n = 0;
+  TODAS.forEach(f => {
     const p = f.properties, o = objetos[p.id], v = visible(p);
     o.grupo[v ? "addLayer" : "removeLayer"](o.poli); o.grupo[v ? "addLayer" : "removeLayer"](o.punto);
     if (!v) return; n++;
     const d = document.createElement("div"); d.className = "fila" + (p.id === activa ? " activa" : ""); d.dataset.id = p.id;
-    d.innerHTML = `<span class="pt" style="background:${COLOR[estadoDe(p.id)]}"></span><span class="id">${esc(p.id)}</span>` +
-      `<span class="meta">${esc(p.area_ha)} ha · ${esc(p.zona_cercana)}</span><span class="estado">${esc(estadoDe(p.id))}</span>`;
+    d.innerHTML = `<span class="pt" style="background:${colorDe(p.id)}"></span><span class="id">${esc(p.id)}</span>` +
+      `<span class="meta">${esc(p.area_ha)} ha · ${esc(p.zona_cercana || p.poblado_cercano || "")}</span><span class="estado">${p.confianza === "parcial" ? "parcial · " : ""}${esc(estadoDe(p.id))}</span>`;
     d.onclick = () => elegir(p.id, true); cont.appendChild(d);
   });
-  const hechas = Object.keys(revision).filter(k => revision[k].estado && revision[k].estado !== "Sin revisar").length;
-  document.getElementById("resumen").textContent = `${n} zonas en la lista · ${hechas} de ${ZONAS.features.length} ya revisadas por ti`;
+  const hechas = TODAS.filter(f => estadoDe(f.properties.id) !== "Sin revisar").length;
+  document.getElementById("resumen").textContent = `${n} zonas en la lista · ${hechas} de ${TODAS.length} ya revisadas por ti`;
 }
-["c-modelo", "c-lv", "filtro"].forEach(i => document.getElementById(i).onchange = dibujarLista);
+["c-modelo", "c-lv", "c-an", "filtro"].forEach(i => document.getElementById(i).onchange = dibujarLista);
 document.getElementById("c-rios").onchange = e => e.target.checked ? capaRios.addTo(mapa) : mapa.removeLayer(capaRios);
 document.getElementById("c-pob").onchange = e => e.target.checked ? capaPob.addTo(mapa) : mapa.removeLayer(capaPob);
 
 // ---- Ficha de una zona
 function elegir(id, volar) {
-  activa = id; const o = objetos[id], p = o.p;
+  activa = id; const o = objetos[id], p = o.p, t = tipoDe(id), fi = document.getElementById("ficha");
   if (volar) mapa.fitBounds(o.poli.getBounds().pad(2.5), {maxZoom: 16});
-  const lv = id.startsWith("LV"), fi = document.getElementById("ficha"); fi.style.display = "block";
+  fi.style.display = "block";
   const puntaje = (p.puntaje_modelo == null || p.puntaje_modelo === "") ? "sin puntaje (ejemplo de entrenamiento)" : `${p.puntaje_modelo} de 100 (relativo, no es una probabilidad)`;
   const aviso = p.area_ha > 1000 ? `<div class="nota"><b>Zona muy grande:</b> probablemente agrupa varias áreas; revisar por partes.</div>` : "";
-  fi.innerHTML = `<h2>${esc(id)} · ${lv ? "lectura visual" : "sugerida por el modelo"}</h2>` +
-    `<dl><dt>Área</dt><dd>${esc(p.area_ha)} ha</dd><dt>Puntaje</dt><dd>${esc(puntaje)}</dd>` +
-    `<dt>Al río/quebrada</dt><dd>${esc(p.dist_rio_m)} m</dd><dt>Al poblado</dt><dd>${esc(p.dist_poblado_m)} m ${String(p.poblado_cercano).startsWith("(") ? esc(p.poblado_cercano) : "(" + esc(p.poblado_cercano) + ")"}</dd>` +
-    `<dt>Zona</dt><dd>${esc(p.zona_cercana)}</dd><dt>Estado</dt><dd>${esc(p.estado_verificacion)}</dd>` +
-    `<dt>Coordenadas</dt><dd>${esc(p.lat)}, ${esc(p.lng)}</dd></dl>${aviso}` +
+  const pob = String(p.poblado_cercano || "");
+  const filas = [["Área", `${esc(p.area_ha)} ha`], ["Puntaje", esc(puntaje)],
+    ["Al río/quebrada", p.dist_rio_m == null || p.dist_rio_m === "" ? "sin dato" : `${esc(p.dist_rio_m)} m`],
+    ["Al poblado", p.dist_poblado_m == null || p.dist_poblado_m === "" ? "sin dato" : `${esc(p.dist_poblado_m)} m ${pob.startsWith("(") ? esc(pob) : pob ? "(" + esc(pob) + ")" : ""}`]];
+  if (p.zona_cercana) filas.push(["Zona", esc(p.zona_cercana)]);
+  filas.push(["Estado", esc(p.estado_verificacion)], ["Coordenadas", `${esc(p.lat)}, ${esc(p.lng)}`]);
+  const avz = (p.avisos_zona || []).map(a => `<div class="alerta">${esc(a)}</div>`).join("");
+  if (p.confianza) filas.push(["Confianza", p.confianza === "completa" ? "completa (cumple las reglas del piloto)" : "parcial"]);
+  const titulo = t === "lv" ? "lectura visual" : t === "an" ? "hallada en el análisis de bloque" : "sugerida por el modelo";
+  fi.innerHTML = `<h2>${esc(id)} · ${titulo}</h2><dl>${filas.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join("")}</dl>${aviso}${avz}` +
     `<div class="nota">${esc(p.nota)}</div><b>Mi revisión</b> (mirando la imagen)` +
     `<select id="r-estado">${OPCIONES.map(x => `<option${x === estadoDe(id) ? " selected" : ""}>${x}</option>`).join("")}</select>` +
     `<textarea id="r-nota" placeholder="Qué ves: pozas, suelo removido, camino, banco de arena, derrumbe...">${esc((revision[id] && revision[id].nota) || "")}</textarea>`;
@@ -189,13 +237,161 @@ function bajar(nombre, filas) {
 }
 document.getElementById("b-mi").onclick = () => bajar("mi_revision_zonas.csv",
   [["id", "mi_revision", "mi_nota", "fecha", "area_ha", "puntaje_modelo", "lat", "lng"]].concat(
-    ZONAS.features.map(f => f.properties).filter(p => estadoDe(p.id) !== "Sin revisar")
+    TODAS.map(f => f.properties).filter(p => estadoDe(p.id) !== "Sin revisar")
       .map(p => [p.id, estadoDe(p.id), revision[p.id].nota, revision[p.id].fecha, p.area_ha, p.puntaje_modelo, p.lat, p.lng])));
 const COLS = ["id", "nombre", "tipo", "origen", "lat", "lng", "area_ha", "puntaje_modelo", "prioridad", "zona_cercana", "estado_verificacion",
   "dist_rio_m", "dist_poblado_m", "poblado_cercano", "actualizado", "deteccion", "nota"];
-document.getElementById("b-todo").onclick = () => bajar("zonas_para_revisar.csv",
-  [COLS].concat(ZONAS.features.map(f => COLS.map(c => f.properties[c]))));
-dibujarLista();
+document.getElementById("b-todo").onclick = () => bajar("zonas_para_revisar.csv", [COLS].concat(TODAS.map(f => COLS.map(c => f.properties[c]))));
+
+// =====================================================================================
+//  ANALISIS DE UN BLOQUE: dibujar un recuadro, el servidor local corre el modelo, se dibujan las zonas
+// =====================================================================================
+const tarjeta = document.getElementById("tarjeta"), barrido = document.getElementById("barrido");
+let servidor = null;            // datos de /api/salud, o null si el visor se abrio sin servidor
+let bloque = null;              // rectangulo dibujado (L.rectangle)
+let dibujando = false, ancla = null;
+let analisisActual = null;      // ids de las zonas del ultimo analisis
+const kmDe = b => { const lat = (b.getNorth() + b.getSouth()) / 2;
+  return [(b.getEast() - b.getWest()) * 111.32 * Math.cos(lat * Math.PI / 180), (b.getNorth() - b.getSouth()) * 110.57]; };
+const medidaOk = km => servidor && Math.max(...km) <= servidor.max_lado_km && Math.min(...km) >= servidor.min_lado_km;
+
+function mostrar(html) { tarjeta.innerHTML = html; tarjeta.style.animation = "none"; void tarjeta.offsetWidth; tarjeta.style.animation = ""; }
+
+function pantallaInicio() {
+  quitarBarrido();
+  const sin = !servidor;
+  mostrar(`<h3>Analizar una zona</h3>
+    <p>Dibuja un recuadro en cualquier lugar del mapa y el modelo marcará las zonas con parecido a posible actividad minera.</p>
+    ${sin ? `<div class="alerta">Para analizar necesitas abrir el visor con <b>EJECUTAR-VISOR.bat</b>. Así solo se puede ver la lista del piloto.</div>` : ""}
+    <div class="buscar"><input type="text" id="q-lugar" placeholder="Ir a un lugar: ej. La Pampa, Madre de Dios"><button id="b-ir">Ir</button></div>
+    <div class="fila-b"><button class="primario" id="b-dibujar" ${sin ? "disabled" : ""}>Dibujar un bloque</button>
+    <button id="b-piloto">Ver zona piloto</button>${analisisActual ? '<button id="b-quitar">Quitar análisis</button>' : ""}</div>`);
+  document.getElementById("b-dibujar").onclick = empezarDibujo;
+  document.getElementById("b-piloto").onclick = () => mapa.fitBounds(vistaPiloto);
+  if (document.getElementById("b-quitar")) document.getElementById("b-quitar").onclick = quitarAnalisis;
+  const ir = () => irA(document.getElementById("q-lugar").value);
+  document.getElementById("b-ir").onclick = ir; document.getElementById("q-lugar").onkeydown = e => { if (e.key === "Enter") ir(); };
+}
+async function irA(texto) {
+  if (!texto.trim()) return;
+  try {   // busqueda de lugares de OpenStreetMap (Nominatim): se envia solo el texto escrito
+    const r = await (await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(texto))).json();
+    if (!r.length) return alert("No encontré ese lugar.");
+    const b = r[0].boundingbox.map(Number); mapa.fitBounds([[b[0], b[2]], [b[1], b[3]]], {maxZoom: 12});
+  } catch (e) { alert("No pude buscar el lugar (¿hay internet?)."); }
+}
+
+function empezarDibujo() {
+  quitarBloque(); dibujando = true; ancla = null;
+  mapa.dragging.disable(); mapa.doubleClickZoom.disable(); mapa.getContainer().style.cursor = "crosshair";
+  mostrar(`<h3>Dibuja el bloque</h3><p>Mantén presionado el botón del mouse y arrastra sobre el mapa. Tamaño máximo: ${servidor.max_lado_km} × ${servidor.max_lado_km} km
+    (acércate si hace falta; la escala abajo a la izquierda te guía).</p><div class="fila-b"><button id="b-cancelar">Cancelar</button></div>`);
+  document.getElementById("b-cancelar").onclick = () => { finDibujo(); quitarBloque(); pantallaInicio(); };
+}
+function finDibujo() { dibujando = false; mapa.dragging.enable(); mapa.doubleClickZoom.enable(); mapa.getContainer().style.cursor = ""; }
+function quitarBloque() { if (bloque) { mapa.removeLayer(bloque); bloque = null; } quitarBarrido(); }
+mapa.on("mousedown", e => { if (!dibujando) return; ancla = e.latlng; bloque = L.rectangle([ancla, ancla], {color: "#7048e8", weight: 2, fillOpacity: .12}).addTo(mapa); });
+mapa.on("mousemove", e => { if (dibujando && ancla && bloque) { bloque.setBounds([ancla, e.latlng]); medida(); } });
+mapa.on("mouseup", () => { if (dibujando && ancla && bloque) { ancla = null; finDibujo(); confirmar(); } });
+
+function medida() {
+  const km = kmDe(bloque.getBounds()), ok = medidaOk(km);
+  bloque.setStyle({color: ok ? "#7048e8" : "#c92a2a", fillColor: ok ? "#7048e8" : "#c92a2a"});
+  bloque.bindTooltip(`${km[0].toFixed(1)} × ${km[1].toFixed(1)} km`, {permanent: true, direction: "center"}).openTooltip();
+}
+function confirmar() {
+  medida();
+  const km = kmDe(bloque.getBounds()), ok = medidaOk(km);
+  mostrar(`<h3>Bloque dibujado</h3><div class="medida ${ok ? "bien" : "mal"}">${km[0].toFixed(1)} × ${km[1].toFixed(1)} km (${(km[0] * km[1]).toFixed(0)} km²)</div>
+    <p>${ok ? "Tamaño correcto. El análisis descarga la imagen satelital de este lugar y tarda cerca de 1 a 2 minutos."
+            : `El bloque debe medir entre ${servidor.min_lado_km} y ${servidor.max_lado_km} km por lado. Dibújalo de nuevo.`}</p>
+    <label style="font-size:13px">Sensibilidad <select id="sens" style="width:auto"><option value="normal">Normal (menos falsos positivos)</option><option value="alta">Alta (marca más terreno)</option></select></label>
+    <div class="alerta">Si el lugar está fuera del norte de La Paz, el modelo no fue validado ahí: puede confundir otros terrenos con minería.</div>
+    <div class="fila-b"><button class="primario" id="b-analizar" ${ok ? "" : "disabled"}>Analizar este bloque</button><button id="b-redib">Dibujar de nuevo</button><button id="b-cancelar">Cancelar</button></div>`);
+  document.getElementById("b-analizar").onclick = analizar;
+  document.getElementById("b-redib").onclick = empezarDibujo;
+  document.getElementById("b-cancelar").onclick = () => { quitarBloque(); pantallaInicio(); };
+}
+
+// barrido de luz sobre el bloque mientras se analiza
+function ponerBarrido() {
+  if (!bloque) return; const b = bloque.getBounds(), a = mapa.latLngToContainerPoint(b.getNorthWest()), z = mapa.latLngToContainerPoint(b.getSouthEast());
+  Object.assign(barrido.style, {display: "block", left: a.x + "px", top: a.y + "px", width: (z.x - a.x) + "px", height: (z.y - a.y) + "px"});
+}
+function quitarBarrido() { barrido.style.display = "none"; if (bloque && bloque._path) bloque._path.classList.remove("escaneando"); }
+mapa.on("move zoom viewreset", () => { if (barrido.style.display === "block") ponerBarrido(); });
+
+async function analizar() {
+  const b = bloque.getBounds(), caja = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+  const sens = (document.getElementById("sens") || {}).value || "normal";
+  bloque.unbindTooltip(); bloque._path.classList.add("escaneando"); ponerBarrido();
+  pintarEtapas(0, 0, "Enviando el bloque al modelo", 0, 0);
+  let id;
+  try {
+    const r = await fetch("/api/analizar", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({bbox: caja, sensibilidad: sens})});
+    const d = await r.json(); if (!r.ok) throw new Error(d.error || "No se pudo iniciar el análisis."); id = d.id;
+  } catch (e) { return fallo(e.message); }
+  const t = setInterval(async () => {
+    try {
+      const e = await (await fetch("/api/estado?id=" + id)).json();
+      if (e.estado === "corriendo") pintarEtapas(e.etapa, e.etapa_frac, e.mensaje, e.progreso, e.transcurrido_s);
+      else { clearInterval(t); if (e.estado === "listo") resultado(e.resultado); else fallo(e.error); }
+    } catch (err) { clearInterval(t); fallo("Se perdió la conexión con el servidor local."); }
+  }, 600);
+}
+function pintarEtapas(etapa, frac, msg, prog, seg) {
+  const lis = servidor.etapas.map((n, i) => `<li class="${i < etapa ? "hecha" : i === etapa ? "activa" : ""}"><span class="ico"></span>${esc(n)}</li>`).join("");
+  mostrar(`<h3>Analizando el bloque</h3><ul class="etapas">${lis}</ul><div class="barra"><i style="width:${Math.max(3, Math.round(prog * 100))}%"></i></div>
+    <div class="msg">${esc(msg)} · ${Math.round(prog * 100)}% · ${Math.round(seg || 0)} s</div>`);
+}
+function fallo(texto) {
+  quitarBarrido();
+  mostrar(`<h3>No se pudo analizar</h3><div class="error">${esc(texto)}</div><div class="fila-b"><button class="primario" id="b-otra">Volver</button></div>`);
+  document.getElementById("b-otra").onclick = () => { quitarBloque(); pantallaInicio(); };
+}
+
+function contar(el, hasta, dec) {   // numero que sube con animacion
+  const t0 = performance.now(), dur = 900;
+  const paso = t => { const k = Math.max(0, Math.min(1, (t - t0) / dur)), e = 1 - Math.pow(1 - k, 3); el.textContent = (hasta * e).toFixed(dec); if (k < 1) requestAnimationFrame(paso); };
+  requestAnimationFrame(paso);
+}
+function resultado(r) {
+  quitarBarrido(); const R = r.resumen, fs = r.zonas.features;
+  quitarAnalisis(true); analisisActual = fs.map(f => f.properties.id);
+  if (bloque) { bloque.setStyle({dashArray: "4 4", fillOpacity: .04}); }
+  // las zonas aparecen una por una, con una onda al entrar
+  fs.forEach((f, i) => setTimeout(() => {
+    agregarZona(f, true); pintar(f.properties.id); dibujarLista();
+    const ic = L.marker([f.properties.lat, f.properties.lng], {icon: L.divIcon({className: "", html: '<div class="onda"></div>', iconSize: [0, 0]}), interactive: false}).addTo(mapa);
+    setTimeout(() => mapa.removeLayer(ic), 1500);
+  }, 350 * i + 300));
+  if (bloque) mapa.fitBounds(bloque.getBounds().pad(0.15));
+  const fechas = R.imagenes_usadas.map(x => x.fecha).sort();
+  const avisos = R.avisos.map(a => `<div class="alerta">${esc(a)}</div>`).join("");
+  mostrar(`<h3>Resultado</h3><p style="color:var(--texto)">${esc(R.veredicto)}</p>
+    <div class="grande"><div><b id="n-z">0</b><span>zonas para revisar</span></div><div><b id="n-ha">0</b><span>hectáreas en total</span></div></div>
+    ${avisos}
+    <div class="datos"><span>Bloque: ${R.bloque_km[0]} × ${R.bloque_km[1]} km</span><span>Imagen útil: ${R.cobertura_imagen_pct}%</span>
+    <span>${R.imagenes_usadas.length} fotos Sentinel-2</span><span>${fechas[0]} a ${fechas[fechas.length - 1]}</span>
+    <span>Dentro del área de entrenamiento: ${R.dentro_zona_entrenamiento_pct}%</span><span>${R.desde_cache ? "Resultado guardado" : "Tardó " + R.segundos + " s"}</span></div>
+    <p>Puntaje relativo, no es una probabilidad. No indica legalidad ni mercurio. Toca una zona para ver su ficha y marcar tu revisión.</p>
+    <div class="fila-b"><button class="primario" id="b-otro">Analizar otro bloque</button><button id="b-quitar2">Quitar análisis</button></div>`);
+  contar(document.getElementById("n-z"), R.n_zonas, 0); contar(document.getElementById("n-ha"), R.area_total_ha, 1);
+  document.getElementById("b-otro").onclick = () => { quitarBloque(); empezarDibujo(); };
+  document.getElementById("b-quitar2").onclick = quitarAnalisis;
+}
+function quitarAnalisis(silencioso) {
+  (analisisActual || []).forEach(id => { const o = objetos[id]; if (o) { o.grupo.removeLayer(o.poli); o.grupo.removeLayer(o.punto); delete objetos[id];
+    const i = TODAS.findIndex(f => f.properties.id === id); if (i >= 0) TODAS.splice(i, 1); } });
+  analisisActual = null; dibujarLista();
+  if (silencioso !== true) { quitarBloque(); pantallaInicio(); }
+}
+
+// ---- Arranque: detecta si el visor se abrio con el servidor local
+dibujarLista(); pantallaInicio();
+if (location.protocol.startsWith("http")) {
+  fetch("/api/salud").then(r => r.json()).then(d => { if (d.ok && d.modelo) { servidor = d; pantallaInicio(); } }).catch(() => {});
+}
 </script>
 </body>
 </html>

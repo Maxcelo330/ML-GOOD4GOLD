@@ -1,0 +1,40 @@
+{
+  "modo": "normal",
+  "fecha": "2026-11-25",
+  "semilla": 42,
+  "umbral": 0.5,
+  "variables": [
+    "B02",
+    "B03",
+    "B04",
+    "B08",
+    "B11",
+    "B12",
+    "ndvi",
+    "ndwi",
+    "bsi",
+    "pendiente"
+  ],
+  "pixeles_por_poligono_max": 400,
+  "fondo": 3000,
+  "bloque_m": 5000,
+  "candidatos_mineria": 9,
+  "candidatos_no_mineria": 108,
+  "origen_etiquetas": {
+    "claude (propuesta, pendiente de revision humana)": 62,
+    "claude (lectura visual de la imagen)": 54,
+    "humano": 1
+  },
+  "poligonos_compartidos_entre_entrenamiento_y_examen": 0,
+  "huella_sha256_candidatos": "f9799df0163b00aff874e2080e7868679b8ab72ed5ddd2e14c10fc0f16e92dd9",
+  "aviso": "Etiquetas propuestas por Claude (lectura visual), sin verificacion de campo. Los puntajes no son probabilidades.",
+  "versiones": {
+    "python": "3.11.18",
+    "lightgbm": "4.7.0",
+    "scikit-learn": "1.9.1",
+    "numpy": "2.4.6",
+    "pandas": "2.3.3",
+    "geopandas": "1.2.0",
+    "rasterio": "1.4.4"
+  }
+}

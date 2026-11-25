@@ -1,0 +1,12 @@
+prueba,n,positivos,precision,recall,f1,ap,verdaderos_pos,falsos_pos,falsos_neg,verdaderos_neg
+MODELO - bloques de 5 km (todo junto),39868,3387,0.282,0.683,0.399,0.286,2313.0,5896.0,1074.0,30585.0
+"MODELO - bloques de 5 km (solo candidatos, mas dificil)",36613,3387,0.289,0.683,0.406,0.292,2313.0,5690.0,1074.0,27536.0
+LINEA BASE NDVI<0.5 - bloques de 5 km,39868,3387,0.1,0.852,0.179,0.098,2886.0,26018.0,501.0,10463.0
+LINEA BASE NDVI<0.3 - bloques de 5 km,39868,3387,0.135,0.67,0.224,0.118,2270.0,14567.0,1117.0,21914.0
+LINEA BASE ordenar por -NDVI (solo AP) - bloques de 5 km,39868,3387,,,,0.119,,,,
+MODELO - pueblo afuera (todo junto),17431,3387,0.383,0.588,0.464,0.363,1993.0,3214.0,1394.0,10830.0
+"MODELO - pueblo afuera (solo candidatos, mas dificil)",15852,3387,0.393,0.588,0.471,0.371,1993.0,3081.0,1394.0,9384.0
+LINEA BASE NDVI<0.5 - pueblo afuera,17431,3387,0.242,0.852,0.377,0.235,2886.0,9028.0,501.0,5016.0
+LINEA BASE NDVI<0.3 - pueblo afuera,17431,3387,0.513,0.67,0.581,0.408,2270.0,2154.0,1117.0,11890.0
+LINEA BASE ordenar por -NDVI (solo AP) - pueblo afuera,17431,3387,,,,0.501,,,,
+MODELO SOLO NDVI - bloques de 5 km (todo junto),39868,3387,0.124,0.616,0.206,0.121,2088.0,14785.0,1299.0,21696.0

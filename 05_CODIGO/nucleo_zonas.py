@@ -69,11 +69,14 @@ def puntuar(modelo, datos, valido):
     return prob
 
 
-def extraer_zonas(prob, ndvi, ndwi, nobs, T, crs, excluir=None, aceptadas=None):
+def extraer_zonas(prob, ndvi, ndwi, nobs, T, crs, excluir=None, aceptadas=None, estricto=True, unir_px=0, umbral=UMBRAL):
     """Convierte el mapa de puntaje en zonas. Devuelve (GeoDataFrame, info).
 
     excluir:   mascara booleana de lo que el modelo ya vio al entrenar (se ignora).
     aceptadas: mascara booleana de las zonas mineras de entrenamiento (se ignora su borde de 100 m).
+    estricto: True = las reglas de fotos y de entorno eliminan zonas (piloto). False = solo las marcan (otros lugares).
+    umbral: puntaje minimo del pixel (0.5 normal; mas bajo = mas sensible y mas falsos positivos).
+    unir_px: une pedazos separados por menos de ~2*unir_px pixeles (20 m cada uno). El piloto no une (0).
     El GeoDataFrame trae: puntaje (media), area_ha, obs_mediana, ndvi_mediano y la geometria en 'crs'.
     """
     forma = prob.shape
@@ -84,10 +87,12 @@ def extraer_zonas(prob, ndvi, ndwi, nobs, T, crs, excluir=None, aceptadas=None):
     aceptadas = np.zeros(forma, bool) if aceptadas is None else aceptadas
     cerca_sin_datos = ndi.binary_dilation(~valido, structure=np.ones((3, 3)), iterations=MARGEN_SIN_DATOS_PX)
     borde_aceptadas = ndi.binary_dilation(aceptadas, structure=np.ones((3, 3)), iterations=BORDE_ENTRENAMIENTO_PX)
-    base = valido & (prob >= UMBRAL)
+    base = valido & (prob >= umbral)
     mascara = base & ~agua & ~excluir & ~cerca_sin_datos & ~borde_aceptadas
     mascara = ndi.binary_closing(mascara, structure=np.ones((3, 3)))
     mascara = ndi.binary_opening(mascara, structure=np.ones((3, 3)))
+    if unir_px:   # areas mineras grandes salen en pedacitos (efecto panal): se unen los que estan muy cerca
+        mascara = ndi.binary_closing(mascara, structure=np.ones((3, 3)), iterations=unir_px) & ~agua
     info = {"pixeles_sobre_umbral": int(base.sum()), "de_ellos_agua": int((base & agua).sum()),
             "de_ellos_entrenamiento": int((base & excluir).sum())}
     vacio = gpd.GeoDataFrame({"puntaje": [], "area_ha": [], "obs_mediana": [], "ndvi_mediano": []},
@@ -103,26 +108,43 @@ def extraer_zonas(prob, ndvi, ndwi, nobs, T, crs, excluir=None, aceptadas=None):
         info.update(descartadas_fotos_o_ndvi=0, descartadas_entorno=0, zonas_finales=0)
         return vacio, info
 
-    # Filtro por zona: suficientes fotos validas y vegetacion baja
+    # Reglas por zona. Todas se calculan siempre:
+    #   color   : NDVI mediano < 0.45 (suelo con poca vegetacion). Siempre elimina: una zona verde no es mineria.
+    #   fotos   : mediana de 7+ fotos validas por pixel.
+    #   entorno : rodeada de vegetacion (NDVI del entorno >= 0.5). Pensada para el norte de La Paz, donde la mineria
+    #             aluvial esta dentro del bosque; en una gran area minera el entorno de un pedazo es mas mina.
+    # estricto=True (la lista del piloto): fotos y entorno ELIMINAN la zona.
+    # estricto=False (analisis de bloques fuera del piloto): solo se MARCAN y la zona queda con confianza "parcial".
     med_obs = np.asarray(ndi.median(nobs.astype("float32"), etiquetas, index=buenos))
     med_ndvi = np.asarray(ndi.median(np.where(np.isfinite(ndvi), ndvi, np.nan), etiquetas, index=buenos))
-    pasa = (med_obs >= MIN_OBS_MEDIANA) & (med_ndvi < NDVI_MEDIANA_MAX)
-    info["descartadas_fotos_o_ndvi"] = int((~pasa).sum())
-    buenos, med_obs, med_ndvi = buenos[pasa], med_obs[pasa], med_ndvi[pasa]
-
-    # Filtro por entorno: la mineria aluvial de la zona esta rodeada de bosque
+    color_ok = med_ndvi < NDVI_MEDIANA_MAX
+    buenos, med_obs, med_ndvi = buenos[color_ok], med_obs[color_ok], med_ndvi[color_ok]
+    fotos_ok = med_obs >= MIN_OBS_MEDIANA
     cajas = ndi.find_objects(etiquetas)
-    entorno_ok = []
+    entorno_ok, ndvi_entorno = [], []
     for k in buenos:
         f, c = cajas[k - 1]
         f0, f1, c0, c1 = max(f.start - 16, 0), f.stop + 16, max(c.start - 16, 0), c.stop + 16
         zona_k = etiquetas[f0:f1, c0:c1] == k
         anillo = ndi.binary_dilation(zona_k, iterations=ANILLO_PX) & ~ndi.binary_dilation(zona_k, iterations=2)
         v = ndvi[f0:f1, c0:c1][anillo & valido[f0:f1, c0:c1]]
-        entorno_ok.append(v.size > 0 and np.median(v) >= ENTORNO_NDVI_MIN)
-    entorno_ok = np.array(entorno_ok, dtype=bool)
-    info["descartadas_entorno"] = int((~entorno_ok).sum())
-    buenos, med_obs, med_ndvi = buenos[entorno_ok], med_obs[entorno_ok], med_ndvi[entorno_ok]
+        m = float(np.median(v)) if v.size else np.nan
+        ndvi_entorno.append(m)
+        entorno_ok.append(bool(v.size > 0 and m >= ENTORNO_NDVI_MIN))
+    entorno_ok, ndvi_entorno = np.array(entorno_ok, dtype=bool), np.array(ndvi_entorno)
+    info["descartadas_color"] = int((~color_ok).sum())
+    info["con_pocas_fotos"] = int((~fotos_ok).sum())
+    info["con_entorno_sin_vegetacion"] = int((~entorno_ok).sum())
+    if estricto:
+        info["descartadas_fotos_o_ndvi"] = int((~color_ok).sum()) + int((~fotos_ok).sum())
+        info["descartadas_entorno"] = int((fotos_ok & ~entorno_ok).sum())
+        mantener = fotos_ok & entorno_ok
+    else:
+        info["descartadas_fotos_o_ndvi"] = int((~color_ok).sum())
+        info["descartadas_entorno"] = 0
+        mantener = np.ones(len(buenos), dtype=bool)
+    buenos, med_obs, med_ndvi = buenos[mantener], med_obs[mantener], med_ndvi[mantener]
+    fotos_ok, entorno_ok, ndvi_entorno = fotos_ok[mantener], entorno_ok[mantener], ndvi_entorno[mantener]
     info["zonas_finales"] = int(len(buenos))
     if len(buenos) == 0:
         return vacio, info
@@ -133,10 +155,14 @@ def extraer_zonas(prob, ndvi, ndwi, nobs, T, crs, excluir=None, aceptadas=None):
         geoms.append(shape(g).simplify(15))   # ~15 m: el archivo pesa poco
         ids.append(int(v))
     pm = ndi.mean(np.where(valido, prob, 0), etiquetas, index=ids)
-    por_etiqueta = {int(k): (o, nd) for k, o, nd in zip(buenos, med_obs, med_ndvi)}
+    por_etiqueta = {int(k): (o, nd, fo, eo, ne) for k, o, nd, fo, eo, ne in
+                    zip(buenos, med_obs, med_ndvi, fotos_ok, entorno_ok, ndvi_entorno)}
     gdf = gpd.GeoDataFrame({"puntaje": np.round(pm, 3),
                             "obs_mediana": [round(float(por_etiqueta[i][0]), 1) for i in ids],
-                            "ndvi_mediano": [round(float(por_etiqueta[i][1]), 3) for i in ids]},
+                            "ndvi_mediano": [round(float(por_etiqueta[i][1]), 3) for i in ids],
+                            "fotos_ok": [bool(por_etiqueta[i][2]) for i in ids],
+                            "entorno_ok": [bool(por_etiqueta[i][3]) for i in ids],
+                            "ndvi_entorno": [round(float(por_etiqueta[i][4]), 3) for i in ids]},
                            geometry=geoms, crs=crs)
     gdf["area_ha"] = (gdf.geometry.area / 10_000).round(1)
     return gdf, info
