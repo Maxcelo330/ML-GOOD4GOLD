@@ -1,0 +1,26 @@
+{
+  "fuente": "OpenStreetMap via Overpass API",
+  "licencia": "ODbL (c) colaboradores de OpenStreetMap",
+  "recuadro_s_o_n_e": [
+    -15.9,
+    -68.42,
+    -15.0,
+    -67.2
+  ],
+  "fecha_archivo_crudo": "2026-11-25",
+  "cauces_por_tipo": {
+    "stream": 379,
+    "river": 198
+  },
+  "poblados_por_tipo": {
+    "hamlet": 185,
+    "village": 104,
+    "town": 2,
+    "city": 1
+  },
+  "longitud_km_por_tipo": {
+    "river": 2374.0,
+    "stream": 1071.0
+  },
+  "aviso": "Datos de voluntarios: pueden faltar cauces o caserios. Las distancias son una guia."
+}

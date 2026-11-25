@@ -27,8 +27,8 @@ IMPORTANTE sobre el significado de los numeros:
     suelo desnudo que no es mineria (laderas, derrumbes, playas). Todo debe verificarse en campo.
   - El cruce con el catastro minero (AJAM) NO se ha hecho, y el texto lo dice asi.
 
-Pendiente (no se calcula aqui): dist_rio_m y dist_poblado_m. Necesitan la capa completa de rios y de
-centros poblados. Se agregan cuando esas capas esten listas.
+Distancias: dist_rio_m y dist_poblado_m se calculan con la capa de OpenStreetMap que deja paso7
+(04_DATOS/referencia/rios_y_poblados.gpkg). Son una guia, no una medida oficial.
 
 Como correrlo (entorno g4g-ml):
   python 05_CODIGO\\paso6_exportar_plataforma.py --prueba     (usa el mapa PRUEBA_, solo para probar el codigo)
@@ -182,6 +182,22 @@ cent = todo.geometry.representative_point()
 d = np.array([[c.distance(p) for p in pob.geometry] for c in cent])
 todo["zona_cercana"] = pob["nombre"].to_numpy()[d.argmin(axis=1)]
 
+# Distancias (en metros, desde el borde de la zona) al cauce y al poblado mas cercanos de OpenStreetMap.
+# Es una GUIA: OSM lo hacen voluntarios y pueden faltar cauces o caserios (ver paso7).
+REF = RAIZ / "04_DATOS" / "referencia" / "rios_y_poblados.gpkg"
+if REF.exists():
+    cauces = gpd.read_file(REF, layer="cauces")
+    lugares = gpd.read_file(REF, layer="poblados_osm")
+    union_cauces = cauces.geometry.union_all()
+    todo["dist_rio_m"] = (todo.geometry.distance(union_cauces) / 10).round().astype(int) * 10
+    dl = np.array([[g.distance(p) for p in lugares.geometry] for g in todo.geometry])
+    todo["dist_poblado_m"] = (dl.min(axis=1) / 10).round().astype(int) * 10
+    nombres = lugares["nombre"].fillna("").to_numpy()[dl.argmin(axis=1)]
+    todo["poblado_cercano"] = [n if n else "(sin nombre en OSM)" for n in nombres]
+else:
+    print("AVISO: falta 04_DATOS/referencia/rios_y_poblados.gpkg (corre paso7); las distancias van vacias.")
+    todo["dist_rio_m"], todo["dist_poblado_m"], todo["poblado_cercano"] = "", "", ""
+
 # 5. Exportar
 wgs = todo.to_crs("EPSG:4326")
 c4326 = wgs.geometry.representative_point()
@@ -197,8 +213,9 @@ tabla = pd.DataFrame({
     "prioridad": todo["prioridad"],
     "zona_cercana": todo["zona_cercana"],
     "estado_verificacion": "por verificar en campo; registro AJAM aun no consultado",
-    "dist_rio_m": "",          # pendiente: requiere capa de rios
-    "dist_poblado_m": "",      # pendiente: requiere capa de centros poblados
+    "dist_rio_m": todo["dist_rio_m"],              # al rio o quebrada mas cercano (OSM, guia)
+    "dist_poblado_m": todo["dist_poblado_m"],      # al poblado mas cercano (OSM, guia)
+    "poblado_cercano": todo["poblado_cercano"],
     "actualizado": PERIODO_IMAGEN,
     "deteccion": todo["deteccion"],
     "nota": todo["nota"],

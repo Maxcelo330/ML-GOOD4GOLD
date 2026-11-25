@@ -13,6 +13,7 @@ Proyecto de la decisión D-003 del hackathon Gold4Good (desafío ORO-4.2). Esta 
 | `04_DATOS/resultados` | Mapa de puntaje (`puntaje_mineria.tif`) y CSV/GeoJSON para la plataforma |
 | `05_CODIGO/` | Scripts y cuadernos del pipeline |
 | `06_QGIS-PROYECTO/` | Proyecto `.qgz` |
+| `07_VISOR/` | `visor.html`: mapa interactivo de las zonas para revisar (doble clic; ver `LEEME.md`) |
 
 ## Entorno
 ```
