@@ -290,7 +290,9 @@ if len(partes):
 
 # ----------------------------------------------------------------- 4. modelo final y mapa
 final = nuevo_modelo().fit(D[VARIABLES], y)
-imp = pd.DataFrame({"variable": VARIABLES, "importancia": final.booster_.feature_importance("gain")})
+# Se guarda el modelo entrenado para poder usarlo despues sobre bloques nuevos (servidor del visor, paso 9b)
+final.booster_.save_model(str(RES / f"{PREFIJO}modelo_lgbm.txt"))
+imp =pd.DataFrame({"variable": VARIABLES, "importancia": final.booster_.feature_importance("gain")})
 imp["importancia"] = (imp.importancia / imp.importancia.sum()).round(3)
 imp = imp.sort_values("importancia", ascending=False)
 print("\n=== Variables que mas usa el modelo ===")

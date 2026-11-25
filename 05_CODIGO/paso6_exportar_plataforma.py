@@ -36,27 +36,24 @@ Como correrlo (entorno g4g-ml):
 """
 # NOTA: este script usa las etiquetas de candidatos.gpkg tal como estan hoy.
 import argparse
+import sys
 from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 import rasterio
-from rasterio.features import rasterize, shapes
-from scipy import ndimage as ndi
-from shapely.geometry import shape
+from rasterio.features import rasterize
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))   # (con 'python -I' la carpeta del script no se agrega sola)
+import nucleo_zonas  # noqa: E402  reglas compartidas con el visor
 
 RAIZ = Path(__file__).resolve().parents[1]
 RES = RAIZ / "04_DATOS" / "resultados"
 COMP = RAIZ / "04_DATOS" / "imagenes" / "compuesto"
 
-UMBRAL = 0.5          # puntaje minimo para considerar un pixel
-MIN_HA = 5            # zonas menores a 5 hectareas se descartan
+MIN_HA = nucleo_zonas.MIN_HA   # las zonas de lectura visual tambien deben tener al menos 5 ha
 TOP_N = 30            # solo las N zonas de mayor puntaje (las que un equipo puede revisar)
-MARGEN_SIN_DATOS_PX = 30   # 30 pixeles de 20 m = 600 m alrededor de huecos sin datos (nubes, sombras)
-MIN_OBS_MEDIANA = 7        # la zona debe tener, en mediana, 7 o mas fotos validas
-NDVI_MEDIANA_MAX = 0.45    # y vegetacion baja (NDVI mediano menor a 0.45)
-BORDE_ENTRENAMIENTO_PX = 5 # 5 pixeles = 100 m: lo pegado a una zona minera de entrenamiento no es hallazgo nuevo
 GRANDE_HA = 1000           # una zona de lectura visual mayor a esto se avisa como "muy grande"
 PERIODO_IMAGEN = "mayo-septiembre 2026 (Sentinel-2, compuesto de epoca seca)"
 NOTA = ("Puntaje relativo del modelo, no es una probabilidad. Posible actividad minera (por verificar; registro AJAM "
@@ -84,72 +81,27 @@ with rasterio.open(COMP / "ndvi_2026.tif") as s:
     ndvi = s.read(1)
 with rasterio.open(COMP / "n_observaciones.tif") as s:
     nobs = s.read(1).astype("float32")
-px_ha = abs(T.a * T.e) / 10_000
 
 cand = gpd.read_file(RAIZ / "04_DATOS" / "etiquetas" / "candidatos.gpkg", layer="candidatos")
 dup = cand["duplicado_de"].fillna(0).astype(int) != 0 if "duplicado_de" in cand.columns else pd.Series(False, index=cand.index)
 entrenamiento = cand[cand.decision.isin(["aceptar", "descartar"]) & ~dup]
 
-# 2. Mascara de actividad: puntaje alto, fuera del agua y fuera de lo que se uso para entrenar
-valido = (prob != nodata) & np.isfinite(ndwi) & (ndwi != -9999)
-agua = valido & (ndwi > 0)
+# 2. Zonas: toda la logica (mascaras, filtros por zona, poligonos) vive en nucleo_zonas.py, compartida con el
+#    analisis de bloques del visor, para que las dos usen exactamente las mismas reglas.
 en_entrenamiento = rasterize([(g, 1) for g in entrenamiento.geometry], out_shape=forma, transform=T,
                              fill=0, dtype="uint8").astype(bool)
-# Zonas cerca de huecos sin datos (nubes, sombras): no se evaluan, porque ahi quedan restos de nube que
-# el modelo confunde con suelo expuesto. 30 pixeles de 20 m = 600 m de margen.
-cerca_sin_datos = ndi.binary_dilation(~valido, structure=np.ones((3, 3)), iterations=MARGEN_SIN_DATOS_PX)
-# Borde de las zonas mineras de entrenamiento: lo que queda pegado a una mina ya conocida no es un hallazgo nuevo
-aceptadas = entrenamiento[entrenamiento.decision == "aceptar"]
+aceptadas = entrenamiento[entrenamiento.decision == "aceptar"]   # sus bordes no son hallazgos nuevos
 en_aceptadas = rasterize([(g, 1) for g in aceptadas.geometry], out_shape=forma, transform=T,
                          fill=0, dtype="uint8").astype(bool)
-borde_aceptadas = ndi.binary_dilation(en_aceptadas, structure=np.ones((3, 3)), iterations=BORDE_ENTRENAMIENTO_PX)
-mascara = valido & (prob >= UMBRAL) & ~agua & ~en_entrenamiento & ~cerca_sin_datos & ~borde_aceptadas
-mascara = ndi.binary_closing(mascara, structure=np.ones((3, 3)))
-mascara = ndi.binary_opening(mascara, structure=np.ones((3, 3)))
-print(f"Pixeles con puntaje >= {UMBRAL}: {int((valido & (prob >= UMBRAL)).sum()):,} | de ellos agua: "
-      f"{int((valido & (prob >= UMBRAL) & agua).sum()):,} | dentro de poligonos de entrenamiento: "
-      f"{int((valido & (prob >= UMBRAL) & en_entrenamiento).sum()):,}")
-etiquetas, n = ndi.label(mascara)
-if n == 0:
+gdf, info = nucleo_zonas.extraer_zonas(prob, ndvi, ndwi, nobs, T, "EPSG:32719",
+                                       excluir=en_entrenamiento, aceptadas=en_aceptadas)
+print(f"Pixeles con puntaje >= {nucleo_zonas.UMBRAL}: {info['pixeles_sobre_umbral']:,} | de ellos agua: "
+      f"{info['de_ellos_agua']:,} | dentro de poligonos de entrenamiento: {info['de_ellos_entrenamiento']:,}")
+print(f"Zonas con al menos {nucleo_zonas.MIN_HA} ha: {info['zonas_5ha']} | descartadas por pocas fotos o NDVI alto: "
+      f"{info['descartadas_fotos_o_ndvi']} | descartadas por entorno sin vegetacion: {info['descartadas_entorno']} | "
+      f"quedan {info['zonas_finales']} (antes de quedarse con las {TOP_N} mejores)")
+if len(gdf) == 0:
     raise SystemExit("No quedan zonas; revisa el umbral o el modelo.")
-tamanos = ndi.sum(mascara, etiquetas, index=np.arange(1, n + 1))
-buenos = np.where(tamanos * px_ha >= MIN_HA)[0] + 1
-print(f"Zonas con al menos {MIN_HA} ha: {len(buenos)}")
-# Filtro por zona: suficientes fotos validas y vegetacion baja (descarta restos de nube y laderas con bosque)
-med_obs = ndi.median(nobs, etiquetas, index=buenos)
-med_ndvi = ndi.median(np.where(np.isfinite(ndvi), ndvi, np.nan), etiquetas, index=buenos)
-pasa = (np.asarray(med_obs) >= MIN_OBS_MEDIANA) & (np.asarray(med_ndvi) < NDVI_MEDIANA_MAX)
-print(f"Se descartan {int((~pasa).sum())} zonas por pocas fotos (mediana < {MIN_OBS_MEDIANA}) o NDVI mediano >= "
-      f"{NDVI_MEDIANA_MAX}; quedan {int(pasa.sum())} (antes de quedarse con las {TOP_N} mejores)")
-buenos = buenos[pasa]
-# Filtro por entorno: la mineria aluvial de la zona esta rodeada de bosque. Una mancha rodeada de terreno sin
-# vegetacion (laderas altas de roca o suelo pardo natural) es otro tipo de suelo desnudo. Se mira un anillo de
-# unos 300 m alrededor de cada zona y se pide NDVI mediano >= 0.5 (en la revision visual del 25-nov, las dos
-# laderas pardas del top-30 fallaban esta regla y las zonas mineras no).
-ENTORNO_NDVI_MIN = 0.5
-cajas = ndi.find_objects(etiquetas)
-entorno_ok = []
-for k in buenos:
-    f, c = cajas[k - 1]
-    f0, f1, c0, c1 = max(f.start - 16, 0), f.stop + 16, max(c.start - 16, 0), c.stop + 16
-    zona_k = etiquetas[f0:f1, c0:c1] == k
-    anillo = ndi.binary_dilation(zona_k, iterations=15) & ~ndi.binary_dilation(zona_k, iterations=2)
-    v = ndvi[f0:f1, c0:c1][anillo & valido[f0:f1, c0:c1]]
-    entorno_ok.append(v.size > 0 and np.median(v) >= ENTORNO_NDVI_MIN)
-entorno_ok = np.array(entorno_ok)
-print(f"Se descartan {int((~entorno_ok).sum())} zonas rodeadas de terreno sin vegetacion (NDVI del entorno < {ENTORNO_NDVI_MIN}); "
-      f"quedan {int(entorno_ok.sum())}")
-buenos = buenos[entorno_ok]
-etiquetas = np.where(np.isin(etiquetas, buenos), etiquetas, 0).astype("int32")
-
-# 3. Poligono, area y puntaje medio de cada zona
-geoms, ids = [], []
-for g, v in shapes(etiquetas, mask=etiquetas > 0, transform=T):
-    geoms.append(shape(g).simplify(15))   # simplificar ~15 m para que el archivo pese poco
-    ids.append(int(v))
-pm = ndi.mean(np.where(valido, prob, 0), etiquetas, index=ids)
-gdf = gpd.GeoDataFrame({"puntaje": np.round(pm, 3)}, geometry=geoms, crs="EPSG:32719")
-gdf["area_ha"] = (gdf.geometry.area / 10_000).round(1)
 gdf = gdf.sort_values("puntaje", ascending=False).head(TOP_N).reset_index(drop=True)   # solo las mejores
 gdf["origen"] = "modelo (puntaje relativo)"
 gdf["id"] = [f"ML-{i + 1:03d}" for i in range(len(gdf))]

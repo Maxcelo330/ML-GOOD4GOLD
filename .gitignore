@@ -48,3 +48,4 @@ Thumbs.db
 # Visor interno (muestra zonas sin verificar: no se publica) y descarga cruda de OpenStreetMap
 07_VISOR/visor.html
 04_DATOS/referencia/osm_rios_poblados_crudo.json
+04_DATOS/analisis_bloques/
