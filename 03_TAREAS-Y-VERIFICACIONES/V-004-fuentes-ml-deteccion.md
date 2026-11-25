@@ -8,6 +8,9 @@ prioridad: alta
 veredicto: 
 creada: 2026-11-23
 ---
+> [!warning] Copia de consulta
+> La versión oficial de esta nota está en el vault: `GOOD4GOLD/05_VALIDACION-GEMINI/Verificaciones/V-004-fuentes-ml-deteccion.md`. No editar esta copia.
+
 # V-004 · Fuentes abiertas y licencias para el módulo de detección por imagen
 
 ## Qué se pide

@@ -1,0 +1,46 @@
+# Datos pesados (rasters, imagenes, resultados): se regeneran con el pipeline
+04_DATOS/imagenes/
+04_DATOS/resultados/
+*.tif
+*.tiff
+*.vrt
+*.jp2
+*.nc
+*.zip
+
+# Conserva los vectores pequenos clave (AOI y etiquetas)
+!04_DATOS/zona_piloto.gpkg
+!04_DATOS/etiquetas/*.gpkg
+
+# Archivos temporales de QGIS y GeoPackage
+*.gpkg-shm
+*.gpkg-wal
+*.qgz~
+*.qgs~
+*.aux.xml
+
+# Python / Jupyter
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+.env
+
+# Modelos entrenados pesados
+*.pt
+*.pth
+*.pkl
+*.joblib
+
+# Credenciales (nunca en el repo)
+*.key
+credentials*
+secrets*
+.env*
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Configuracion local de Claude
+.claude/settings.local.json

@@ -8,6 +8,9 @@ prioridad: alta
 entregable: "[[06_ENTREGABLES/Metodo]]"
 creada: 2026-11-23
 ---
+> [!warning] Copia de consulta
+> La versión oficial de esta nota está en el vault: `GOOD4GOLD/04_EJECUCION-CODEX/Tareas/T-003-descarga-sentinel-e-indices.md`. No editar esta copia.
+
 # T-003 · Descarga de Sentinel-2/1 de la zona piloto y cálculo de índices
 
 ## Objetivo
@@ -15,7 +18,7 @@ Un pipeline reproducible en Python que, para la zona piloto (norte de La Paz), d
 
 ## Entradas
 - Entorno: `environment.yml` (conda, `g4g-ml`, Python 3.11) que prepara Claude/el humano y se copia a `04_EJECUCION-CODEX/codigo/ml-pipeline/` al iniciar la tarea.
-- Zona piloto (bbox WGS84): lat -15.9 a -15.0, lng -68.2 a -67.2 (la misma de `js/data/hidro-zona.js` del prototipo).
+- Zona piloto (bbox WGS84): lat -15.9 a -15.0, lng -68.42 a -67.2 (ampliada al oeste el 2026-11-24 por V-005: incluye Mapiri y su tramo minero; ya no coincide con el recuadro de `js/data/hidro-zona.js`).
 - [[01_DESAFIO-4.2/Restricciones]] y [[03_CEREBRO-CLAUDE/Decisiones]] (D-001, D-003)
 - Fuentes: Microsoft Planetary Computer (STAC, sin costo) o Copernicus Data Space. Documentar cuál se usó.
 

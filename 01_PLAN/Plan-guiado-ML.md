@@ -1,16 +1,16 @@
-# Plan guiado: aprender ML construyendo un detector de zonas de posible mineria ilegal (QGIS + imagenes satelitales)
+# Plan guiado: aprender ML construyendo un detector de zonas de posible actividad minera (QGIS + imagenes satelitales)
 
 Reemplaza el plan anterior de superpowers (`/plugin` no esta disponible en este entorno).
 
 ## Context
 Hackathon Gold4Good, desafio ORO-4.2 "Colas con mercurio". Deck el jue 26 nov 23:59; hoy es lun 23 nov. `07_EQUIPO/Apuntes.md` ya pide usar QGIS con imagenes satelitales y deteccion automatica con ML. El usuario no tiene experiencia en machine learning y quiere que el proyecto sirva tambien para aprender: se trabaja paso a paso, cada paso explica el concepto, dice que hace el usuario y que hace Claude, y termina con una comprobacion simple antes de seguir.
 
-Decisiones ya tomadas: resultado = mapa de probabilidad de actividad minera; zona piloto = norte de La Paz (Tipuani, Mapiri, Teoponte, Guanay); laptop con RTX 4060; alcance hackathon 26 nov.
+Decisiones ya tomadas: resultado = mapa de puntaje de parecido a zonas de posible actividad minera (el puntaje ordena zonas para revisar; no es una probabilidad); zona piloto = norte de La Paz (Tipuani, Mapiri, Teoponte, Guanay); laptop con RTX 4060; alcance hackathon 26 nov.
 
 ## Hechos que condicionan el plan
 - <mark style="background:#FF000040">El Excel del desafio es sintetico</mark> (nombres "Demo", puntos aleatorios): no sirve para entrenar. Las etiquetas hay que construirlas con fuentes abiertas y digitalizando en QGIS (ese trabajo es parte del aprendizaje).
 - No hay datos geoespaciales reales en el vault. QGIS y geopandas no estan instalados; Python por defecto es 3.15 (incompatible con PyTorch), asi que se usara un entorno conda con Python 3.11.
-- <mark style="background:#FFD70066">La imagen satelital detecta actividad minera, no legalidad.</mark> "Ilegal" solo se infiere cruzando con el catastro minero (AJAM); sin eso el resultado se llama "actividad minera sin registro conocido: verificar". Lenguaje no punitivo, como pide el desafio.
+- <mark style="background:#FFD70066">La imagen satelital detecta actividad minera, no legalidad.</mark> "Ilegal" solo se infiere cruzando con el catastro minero (AJAM); sin eso el resultado se llama "posible actividad minera (por verificar; registro AJAM aun no consultado)". "Sin registro conocido" solo se usa despues de cruzar con el catastro. Lenguaje no punitivo, como pide el desafio.
 - Noviembre es epoca de lluvias: se usaran imagenes de epoca seca (mayo-sep) y radar.
 
 ## Ruta de aprendizaje y trabajo (cada paso = concepto + tu tarea + mi tarea + comprobacion)
@@ -46,8 +46,8 @@ Que es aprender de ejemplos: etiquetas (lo que sabemos), variables (lo que mide 
 - Tu: predecir las metricas antes de verlas y discutir donde se equivoca.
 - Comprobacion: tabla de metricas con division espacial por bloques (honesta, no aleatoria).
 
-### Paso 6 - Mapa de probabilidad en QGIS
-- Yo: generar el raster de probabilidad y exportarlo.
+### Paso 6 - Mapa de puntaje en QGIS
+- Yo: generar el raster de puntaje y exportarlo.
 - Tu: cargarlo en QGIS, estilizarlo (rampa de color), superponer rios y comparar con la imagen; marcar falsos positivos y falsos negativos.
 - Resultado: primer mapa visual "donde puede haber mineria".
 
@@ -55,7 +55,7 @@ Que es aprender de ejemplos: etiquetas (lo que sabemos), variables (lo que mide 
 - Corregir etiquetas segun los errores del paso 6, agregar variables (pendiente, distancia a rio, cambio 2025 vs 2026), reentrenar. Opcional si hay tiempo y ganas: red neuronal U-Net (concepto de deep learning) en la RTX 4060.
 
 ### Paso 8 - De mapa a lista de puntos para la plataforma
-- Yo: convertir probabilidad en poligonos y centroides; calcular `dist_rio_m`, `dist_poblado_m`, area; exportar CSV/GeoJSON con las columnas del modulo "Datos" y "Pasivos" del prototipo (`deteccion = "imagen satelital (ML)"`).
+- Yo: convertir el puntaje en poligonos y centroides; calcular `dist_rio_m`, `dist_poblado_m`, area; exportar CSV/GeoJSON con las columnas del modulo "Datos" y "Pasivos" del prototipo (`deteccion = "imagen satelital (ML)"`).
 - Tu: cargarlo en `04_EJECUCION-CODEX/codigo/prototipo-web` y ver los puntos en el mapa.
 - Cuando se consiga el catastro AJAM/`APM_*`: cruce para el estado "sin registro conocido: verificar".
 
@@ -75,7 +75,7 @@ Que es aprender de ejemplos: etiquetas (lo que sabemos), variables (lo que mide 
 - `07_EQUIPO/` solo lo editan los humanos.
 
 ## Verificacion global
-- QGIS abre el GeoPackage de etiquetas y el raster de probabilidad con CRS correcto.
+- QGIS abre el GeoPackage de etiquetas y el raster de puntaje con CRS correcto.
 - El pipeline corre desde `environment.yml` y es reproducible (semillas fijas).
 - Metricas con validacion espacial y revision visual documentadas, reportadas tal cual salgan.
 - El CSV exportado se carga en el prototipo sin errores.
