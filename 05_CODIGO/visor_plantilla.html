@@ -24,6 +24,7 @@
   button:hover { background:#eef1f5; } button:active { transform:scale(.97); }
   button.primario { background:var(--acento); border-color:var(--acento); color:#fff; font-weight:600; }
   button.primario:hover { background:#4c2fa3; } button:disabled { opacity:.45; cursor:not-allowed; }
+  :root { --claude:#d97757; --claude-osc:#c4623f; --claude-suave:#fdf1eb; }
   #lista { flex:1; overflow:auto; min-height:120px; }
   .fila { display:flex; align-items:center; gap:8px; padding:7px 14px; border-bottom:1px solid #e8ebf0; cursor:pointer; background:#fff; }
   .fila:hover { background:#f0f3f8; } .fila.activa { background:#fde9d4; }
@@ -45,6 +46,9 @@
   #tarjeta { position:absolute; top:12px; left:54px; width:330px; max-width:calc(100% - 200px); z-index:1000; background:rgba(255,255,255,.97);
     border:1px solid var(--borde); border-radius:12px; box-shadow:0 8px 28px rgba(20,24,40,.22); padding:14px; animation:sube .3s ease; }
   @keyframes sube { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+  #tarjeta, .leaflet-container { -webkit-user-select:none; user-select:none; }   /* al arrastrar el bloque no se selecciona el texto */
+  body.dibujando, body.dibujando * { -webkit-user-select:none; user-select:none; }
+  #tarjeta input, #tarjeta textarea { -webkit-user-select:text; user-select:text; }
   #tarjeta h3 { margin:0 0 6px; font-size:15px; } #tarjeta p { margin:4px 0; font-size:13px; color:var(--suave); }
   #tarjeta .fila-b { display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; }
   .buscar { display:flex; gap:6px; margin:8px 0; }
@@ -67,12 +71,55 @@
   .grande div { flex:1; background:var(--acento-suave); border-radius:10px; padding:8px 10px; text-align:center; }
   .grande b { display:block; font-size:26px; color:var(--acento); line-height:1.1; } .grande span { font-size:11px; color:var(--suave); }
   .datos { display:grid; grid-template-columns:1fr 1fr; gap:3px 10px; font-size:12px; color:var(--suave); margin:8px 0; }
-  .ia-btn { width:100%; margin:8px 0 4px; padding:8px 10px; border:1px solid #7048e8; background:#f3f0ff; color:#3b2a8f; border-radius:8px; font-weight:600; cursor:pointer; }
+  .ia-btn { width:100%; margin:8px 0 4px; padding:8px 10px; border:1px solid #d97757; background:#fdf1eb; color:#7a3b22; border-radius:8px; font-weight:600; cursor:pointer; }
   .ia-btn[disabled] { opacity:.6; cursor:wait; }
-  .ia-caja { border:1px solid #d0bfff; background:#faf8ff; border-radius:8px; padding:8px 10px; font-size:12.5px; margin:6px 0; }
+  .cmp-btn { width:100%; margin:8px 0 4px; padding:8px 10px; border:1px solid var(--acento); background:var(--acento-suave); color:#3b2a8f; border-radius:8px; font-weight:600; cursor:pointer; }
+  .ia-caja { border:1px solid #f0c5b3; background:#fffaf7; border-radius:8px; padding:8px 10px; font-size:12.5px; margin:6px 0; }
   .ia-caja .ver { display:inline-block; font-weight:700; padding:1px 8px; border-radius:10px; color:#fff; margin-right:6px; }
   .ia-caja ul { margin:4px 0 4px 16px; padding:0; }
   .ia-caja .fin { color:var(--suave); font-size:11.5px; margin-top:4px; }
+  .ia-gasto { font-size:11.5px; color:var(--suave); margin:2px 0 6px; }
+  .barra.ia > i { background:linear-gradient(90deg,#d97757,#e8a287,#d97757); background-size:200% 100%; }
+  .ia-gasto .barra { height:5px; background:#f6e1d8; border-radius:3px; overflow:hidden; margin-top:3px; }
+  .ia-gasto .barra i { display:block; height:100%; background:#d97757; }
+  .ia-espera { height:6px; background:#f6e1d8; border-radius:3px; overflow:hidden; margin:6px 0; position:relative; }
+  .ia-espera i { position:absolute; top:0; left:-35%; width:35%; height:100%; background:#d97757; border-radius:3px; animation:iaesp 1.2s ease-in-out infinite; }
+  @keyframes iaesp { 0% { left:-35%; } 100% { left:100%; } }
+  /* ---- Panel de Claude (seleccion de zonas, comparacion modelo vs IA, aprendizaje) */
+  #ia-panel { padding:0; border-bottom:1px solid var(--borde); background:var(--claude-suave); }
+  #ia-panel > summary { padding:8px 14px; cursor:pointer; font-weight:700; color:#7a3b22; list-style:none; }
+  #ia-panel > summary::before { content:"\25B8"; margin-right:6px; color:var(--claude); } #ia-panel[open] > summary::before { content:"\25BE"; }
+  #ia-panel .cuerpo { padding:2px 14px 10px; max-height:46vh; overflow:auto; }
+  #ia-panel h4 { margin:10px 0 4px; font-size:12.5px; color:#7a3b22; }
+  .ia-fila { display:flex; gap:5px; flex-wrap:wrap; margin:4px 0; } .ia-fila button { font-size:12px; padding:3px 7px; }
+  .ia-ch { font-size:10.5px; font-weight:700; color:#fff; border-radius:9px; padding:0 6px; white-space:nowrap; }
+  .fila input.sel { margin:0; accent-color:var(--claude); flex:none; }
+  .pbar { display:flex; align-items:center; gap:6px; font-size:11.5px; margin:2px 0; } .pbar span.t { width:58px; color:var(--suave); }
+  .pbar .b { flex:1; height:7px; background:#f6e1d8; border-radius:4px; overflow:hidden; } .pbar .b i { display:block; height:100%; background:var(--claude); }
+  .mini { font-size:12px; color:var(--texto); margin:3px 0; } .mini small { color:var(--suave); }
+  .ia-btn[disabled] { opacity:.55; }
+  #acceso { position:fixed; inset:0; z-index:6000; background:rgba(20,16,30,.6); display:none; align-items:center; justify-content:center; padding:16px; }
+  #acceso.abierta { display:flex; } #acceso .caja { background:#fff; border-radius:14px; padding:18px; width:min(380px, 100%); box-shadow:0 20px 60px rgba(0,0,0,.45); }
+  #acceso h3 { margin:0 0 6px; } #acceso p { font-size:13px; color:var(--suave); margin:4px 0 10px; } #acceso input[type=text] { font-size:16px; width:100%; border:1px solid var(--borde); border-radius:6px; padding:9px; } #acceso input[type=password] { font-size:16px; width:100%; border:1px solid var(--borde); border-radius:6px; padding:9px; } #acceso label { display:block; margin-top:8px; }
+  #acc-msg:not(:empty) { display:block !important; margin-top:8px; }
+  .hist-fila { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 8px; margin:3px 0; border:1px solid var(--borde); border-radius:8px; background:#fff; cursor:pointer; font-size:12.5px; }
+  .hist-fila:hover { background:var(--acento-suave); } .hist-fila small { color:var(--suave); }
+  /* ---- Ventana de comparacion antes / despues */
+  #comparar { position:fixed; inset:0; z-index:5000; background:rgba(20,16,14,.72); display:none; align-items:center; justify-content:center; }
+  #comparar.abierta { display:flex; }
+  #cmp-caja { width:min(1280px, 96vw); height:min(820px, 94vh); background:#fff; border-radius:14px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+  #cmp-cab { display:flex; align-items:center; gap:10px; padding:8px 14px; border-bottom:1px solid var(--borde); flex-wrap:wrap; }
+  #cmp-cab h3 { margin:0; font-size:15px; flex:1; min-width:180px; } #cmp-cab label { font-size:12.5px; display:inline-flex; align-items:center; gap:4px; }
+  #cmp-cab select { width:auto; max-width:320px; }
+  #cmp-mapa { flex:1; position:relative; background:#222; -webkit-user-select:none; user-select:none; }
+  #cmp-mapa .leaflet-container { background:#222; }
+  .cmp-eti { position:absolute; top:10px; z-index:1100; background:rgba(0,0,0,.65); color:#fff; font-size:12px; padding:3px 9px; border-radius:12px; pointer-events:none; }
+  #cmp-izq { left:10px; } #cmp-der { right:10px; }
+  #cmp-tirador { position:absolute; top:0; bottom:0; width:4px; margin-left:-2px; background:#fff; z-index:1100; cursor:ew-resize; box-shadow:0 0 6px rgba(0,0,0,.6); touch-action:none; }
+  #cmp-tirador::after { content:"\2194"; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:34px; height:34px; border-radius:50%; background:var(--acento);
+    color:#fff; display:grid; place-items:center; font-size:17px; box-shadow:0 2px 8px rgba(0,0,0,.5); }
+  #cmp-pie { padding:8px 14px; border-top:1px solid var(--borde); font-size:12.5px; display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; max-height:34%; overflow:auto; }
+  #cmp-pie .col { flex:1; min-width:260px; } #cmp-pie .ia-caja { margin:0; }
   .alerta { background:#fff4e0; border:1px solid #f0c987; color:#6b4200; border-radius:8px; padding:6px 8px; font-size:12px; margin:6px 0; }
   .error { background:#ffe3e3; border:1px solid #ffa8a8; color:#8a1c1c; border-radius:8px; padding:8px; font-size:13px; }
   /* animaciones sobre el mapa */
@@ -87,7 +134,19 @@
   @keyframes entra { 0% { opacity:0; stroke-width:10; } 60% { opacity:1; } 100% { stroke-width:2; } }
   .onda { width:16px; height:16px; margin:-8px 0 0 -8px; border-radius:50%; border:3px solid var(--acento); animation:onda 1.4s ease-out forwards; pointer-events:none; }
   @keyframes onda { from { transform:scale(.4); opacity:1; } to { transform:scale(4.5); opacity:0; } }
-  @media (max-width:760px) { #app { flex-direction:column-reverse; } #panel { width:100%; max-width:none; height:50%; } #tarjeta { left:10px; top:10px; max-width:calc(100% - 20px); } }
+  @media (max-width:760px) {     /* celular */
+    #app { flex-direction:column-reverse; } #panel { width:100%; max-width:none; height:52%; }
+    #tarjeta { left:10px; right:10px; top:56px; width:auto; max-width:none; max-height:44%; overflow:auto; }
+    .leaflet-top.leaflet-left { display:none; }          /* en el celular se hace zoom con los dedos */
+    button, select, input[type=text] { min-height:40px; } .fila { padding:10px 12px; } .ia-fila button { min-height:36px; }
+    header { padding:8px 12px 6px; } header h1 { font-size:15px; } .aviso { font-size:11px; }
+    #ficha { max-height:60%; } #ia-panel .cuerpo { max-height:40vh; }
+    #cmp-caja { width:100vw; height:100dvh; border-radius:0; } #cmp-cab { gap:6px; padding:6px 10px; }
+    #cmp-cab select { flex:1; min-width:130px; max-width:100%; } #cmp-cab h3 { min-width:100%; } #cmp-pie { max-height:38%; }
+    #cmp-pie .col { min-width:100%; } .cmp-eti { font-size:11px; }
+    #tarjeta p.intro { display:none; }
+    body.dibujando #tarjeta p { display:none; }          /* mientras se dibuja, la tarjeta se achica para no tapar el mapa */
+  }
   @media (prefers-reduced-motion: reduce) { * { animation-duration:.01ms !important; animation-iteration-count:1 !important; } }
 </style>
 </head>
@@ -113,6 +172,7 @@
       </select>
       <div class="nota" id="resumen"></div>
     </div>
+    <details id="ia-panel" style="display:none"><summary>Claude (IA): elegir zonas, comparar y aprender</summary><div class="cuerpo" id="ia-cuerpo"></div></details>
     <div id="lista"></div>
     <div id="ficha"></div>
     <div class="pie">
@@ -123,6 +183,24 @@
   <div id="mapa"><div id="tarjeta"></div><div id="barrido"></div></div>
 </div>
 
+<div id="acceso"><div class="caja"><h3>Acceso a la inteligencia artificial</h3>
+  <p>Las acciones con inteligencia artificial (la opinión de Claude y el aprendizaje del modelo) piden usuario y contraseña. Todo lo demás es libre.</p>
+  <input type="text" id="acc-usuario" placeholder="Usuario" autocomplete="username" autocapitalize="none" spellcheck="false">
+  <input type="password" id="acc-clave" placeholder="Contraseña" autocomplete="current-password" style="margin-top:8px">
+  <label class="mini"><input type="checkbox" id="acc-recordar"> Recordar en este dispositivo</label>
+  <div id="acc-msg" class="error" style="display:none"></div>
+  <div style="display:flex;gap:6px;margin-top:10px"><button class="primario" id="acc-ok">Entrar</button><button id="acc-no">Cancelar</button></div>
+</div></div>
+<div id="comparar"><div id="cmp-caja">
+  <div id="cmp-cab"><h3 id="cmp-tit">Comparación</h3>
+    <label>Antes <select id="cmp-antes"></select></label>
+    <label>Ahora <select id="cmp-ahora"><option value="sentinel">Sentinel-2 2026 (lo que ve el modelo)</option><option value="falso">Sentinel-2 falso color</option><option value="esri">Esri, imagen más reciente</option></select></label>
+    <label><input type="checkbox" id="cmp-contorno" checked> Contorno</label>
+    <label><input type="checkbox" id="cmp-calor"> Puntaje del modelo</label>
+    <button id="cmp-cerrar">Cerrar</button></div>
+  <div id="cmp-mapa"><div class="cmp-eti" id="cmp-izq"></div><div class="cmp-eti" id="cmp-der"></div><div id="cmp-tirador"></div></div>
+  <div id="cmp-pie"></div>
+</div></div>
 <script src="lib/leaflet/leaflet.js"></script>
 <script>
 const ZONAS = __ZONAS__;
@@ -131,14 +209,24 @@ const LUGARES = __LUGARES__;
 const CLAVE = "g4g_revision_v1";
 const OPCIONES = ["Sin revisar", "Parece actividad minera", "No parece actividad minera", "No estoy seguro"];
 const COLOR = {"Sin revisar":"#e8590c", "Parece actividad minera":"#c92a2a", "No parece actividad minera":"#868e96", "No estoy seguro":"#f59f00"};
-const COLOR_AN = {"Sin revisar":"#7048e8"};   // las zonas del analisis de bloques sin revisar van en violeta
+// Direccion del servidor: vacia = el mismo que sirve esta pagina. Para usar el visor desde otra pagina web: window.G4G_API_BASE = "https://mi-servidor"
+const API = (window.G4G_API_BASE || "").replace(/\/$/, "");
+let acceso = null;     // {u, c}: usuario y contrasena de las acciones con IA (se piden solo cuando se usa la IA)
+try { acceso = JSON.parse(sessionStorage.getItem("g4g_acceso_ia") || localStorage.getItem("g4g_acceso_ia") || "null"); } catch (e) {}
+const COLOR_AN = {"Sin revisar":"#7048e8"};   // las zonas del analisis de bloques sin revisar van en violeta; las que Claude opino, en naranja (VERCOL)
+const VERCOL = {probable_mineria:"#d97757", dudoso:"#f59f00", probable_no_mineria:"#adb5bd"};   // color segun la opinion de Claude
+const VERTXT = {probable_mineria:["Parece minería", "sí"], dudoso:["Dudosa", "?"], probable_no_mineria:["No parece minería", "no"]};
+const DUDOSO_MAX = 70;        // puntaje del modelo por debajo del cual la zona se considera "dudosa del modelo"
+let iaOp = {};                // id de zona -> opinion de Claude ya guardada {veredicto, confianza, que_parece}
+let sel = new Set();          // zonas elegidas para pedirle la opinion a Claude
+let filtroIA = "todas";
 let revision = {};
 try { revision = JSON.parse(localStorage.getItem(CLAVE) || "{}"); } catch (e) { revision = {}; }
-const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(revision)); } catch (e) {} };
+const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(revision)); } catch (e) {} if (typeof montarConfirmadas === "function") montarConfirmadas(); };
 const estadoDe = id => (revision[id] && revision[id].estado) || "Sin revisar";
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const tipoDe = id => id.startsWith("LV") ? "lv" : id.startsWith("ML") ? "modelo" : "an";
-const colorDe = id => (tipoDe(id) === "an" && estadoDe(id) === "Sin revisar") ? COLOR_AN["Sin revisar"] : COLOR[estadoDe(id)];
+const colorDe = id => (tipoDe(id) === "an" && estadoDe(id) === "Sin revisar") ? (iaOp[id] ? VERCOL[iaOp[id].veredicto] : COLOR_AN["Sin revisar"]) : COLOR[estadoDe(id)];
 
 // ---- Mapa
 const esri = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
@@ -166,11 +254,12 @@ const TODAS = [];            // todas las zonas (features)
 const objetos = {};
 function estilo(id) { const c = colorDe(id), lv = tipoDe(id) === "lv";
   const parcial = (objetos[id] && objetos[id].p.confianza === "parcial");
-  return {color: c, weight: 2, fillColor: c, fillOpacity: lv ? .12 : .3, dashArray: (lv || parcial) ? "5 4" : null}; }
+  const ok = tipoDe(id) === "an" && estadoDe(id) === "Sin revisar" && iaOp[id] && iaOp[id].veredicto === "probable_mineria";   // Claude la confirma: contorno oscuro y grueso
+  return {color: ok ? "#8f3d1c" : c, weight: ok ? 3.5 : 2, fillColor: c, fillOpacity: lv ? .12 : .3, dashArray: (lv || parcial) ? "5 4" : null}; }
 function agregarZona(f, animar) {
   const p = f.properties, t = tipoDe(p.id);
   const poli = L.geoJSON(f, {style: () => estilo(p.id), className: animar ? "aparece" : ""}).addTo(grupos[t]);
-  const punto = L.circleMarker([p.lat, p.lng], {radius: 8, weight: 2, color: "#fff", fillOpacity: .95, fillColor: colorDe(p.id)}).addTo(grupos[t]);
+  const punto = L.circleMarker([p.lat, p.lng], {radius: 8, weight: 2, color: "#fff", fillOpacity: .95, fillColor: colorDe(p.id)}).addTo(grupos[t]);   // las de bloques analizados llevan borde marron: se distinguen del piloto
   [poli, punto].forEach(o => o.on("click", () => elegir(p.id, false)));
   punto.bindTooltip(p.id);
   objetos[p.id] = {poli, punto, p, grupo: grupos[t]}; TODAS.push(f);
@@ -187,6 +276,11 @@ let activa = null;
 function visible(p) {
   const t = tipoDe(p.id);
   if (!document.getElementById("c-" + (t === "modelo" ? "modelo" : t === "lv" ? "lv" : "an")).checked) return false;
+  if (filtroIA !== "todas") {      // filtro por la opinion de Claude: solo aplica a zonas de bloques analizados
+    if (t !== "an") return false;
+    const v = iaOp[p.id] && iaOp[p.id].veredicto;
+    if (filtroIA === "sin" ? !!v : v !== filtroIA) return false;
+  }
   const f = document.getElementById("filtro").value, rev = estadoDe(p.id) !== "Sin revisar";
   return f === "todas" || (f === "sin" && !rev) || (f === "si" && rev);
 }
@@ -197,9 +291,13 @@ function dibujarLista() {
     o.grupo[v ? "addLayer" : "removeLayer"](o.poli); o.grupo[v ? "addLayer" : "removeLayer"](o.punto);
     if (!v) return; n++;
     const d = document.createElement("div"); d.className = "fila" + (p.id === activa ? " activa" : ""); d.dataset.id = p.id;
-    d.innerHTML = `<span class="pt" style="background:${colorDe(p.id)}"></span><span class="id">${esc(p.id)}</span>` +
-      `<span class="meta">${esc(p.area_ha)} ha · ${esc(p.zona_cercana || p.poblado_cercano || "")}</span><span class="estado">${p.confianza === "parcial" ? "parcial · " : ""}${esc(estadoDe(p.id))}</span>`;
+    const op = iaOp[p.id], casilla = (tipoDe(p.id) === "an" && servidor) ? `<input type="checkbox" class="sel" title="Elegir para pedir la opinión de Claude"${sel.has(p.id) ? " checked" : ""}>` : "";
+    d.innerHTML = `${casilla}<span class="pt" style="background:${colorDe(p.id)}"></span><span class="id">${esc(p.id)}</span>` +
+      `<span class="meta">${esc(p.area_ha)} ha · ${esc(p.zona_cercana || p.poblado_cercano || "")}${op ? ` <span class="ia-ch" style="background:${VERCOL[op.veredicto]}" title="Opinión de Claude: ${VERTXT[op.veredicto][0]}">Claude: ${VERTXT[op.veredicto][1]}</span>` : ""}</span>` +
+      `<span class="estado">${p.confianza === "parcial" ? "parcial · " : ""}${esc(estadoDe(p.id))}</span>`;
     d.onclick = () => elegir(p.id, true); cont.appendChild(d);
+    const cb = d.querySelector("input.sel");
+    if (cb) { cb.onclick = e => e.stopPropagation(); cb.onchange = () => { cb.checked ? sel.add(p.id) : sel.delete(p.id); actualizarSel(); }; }
   });
   const hechas = TODAS.filter(f => estadoDe(f.properties.id) !== "Sin revisar").length;
   document.getElementById("resumen").textContent = `${n} zonas en la lista · ${hechas} de ${TODAS.length} ya revisadas por ti`;
@@ -229,7 +327,7 @@ function elegir(id, volar) {
     `<select id="r-estado">${OPCIONES.map(x => `<option${x === estadoDe(id) ? " selected" : ""}>${x}</option>`).join("")}</select>` +
     `<textarea id="r-nota" placeholder="Qué ves: pozas, suelo removido, camino, banco de arena, derrumbe...">${esc((revision[id] && revision[id].nota) || "")}</textarea>`;
   const guarda = () => { revision[id] = {estado: document.getElementById("r-estado").value, nota: document.getElementById("r-nota").value,
-    fecha: new Date().toISOString().slice(0, 10)}; guardar(); pintar(id); dibujarLista(); enviarEtiqueta(p, revision[id].estado); };
+    fecha: new Date().toISOString().slice(0, 10)}; guardar(); pintar(id); dibujarLista(); enviarEtiqueta(p, revision[id].estado); sincronizarRevisiones(); };
   document.getElementById("r-estado").onchange = guarda; document.getElementById("r-nota").oninput = guarda;
   activarIA(p);
   document.querySelectorAll(".fila").forEach(x => x.classList.toggle("activa", x.dataset.id === id));
@@ -237,7 +335,7 @@ function elegir(id, volar) {
 }
 
 // ---- Segunda opinion de Claude y envio de mi revision al banco de etiquetas (solo zonas de un analisis de bloque)
-const VER = {probable_mineria: ["Parece minería", "#c92a2a"], dudoso: ["Dudosa", "#f59f00"], probable_no_mineria: ["No parece minería", "#868e96"]};
+const VER = {probable_mineria: ["Parece minería", VERCOL.probable_mineria], dudoso: ["Dudosa", VERCOL.dudoso], probable_no_mineria: ["No parece minería", "#868e96"]};
 function cajaIA(o) {
   const [txt, col] = VER[o.veredicto] || ["?", "#868e96"];
   return `<span class="ver" style="background:${col}">${txt}</span> confianza ${esc(o.confianza)}<br>${esc(o.que_parece)}` +
@@ -246,24 +344,306 @@ function cajaIA(o) {
 }
 function bloqueIA(p) {
   if (tipoDe(p.id) !== "an" || !p.clave || !servidor) return "";
-  if (!servidor.ia) return `<div class="ia-caja">Segunda opinión de Claude: desactivada. Para usarla guarda tu clave de la API de Claude (ver 07_VISOR/LEEME.md) y reinicia el visor.</div>`;
-  return `<button class="ia-btn" id="b-ia">Pedir segunda opinión a Claude</button><div id="ia-res"></div>`;
+  const cmp = `<button class="cmp-btn" id="b-cmp">Ver comparación antes / después</button>`;
+  if (!servidor.ia) return cmp + `<div class="ia-caja">Segunda opinión de Claude: desactivada. Para usarla guarda tu clave de la API de Claude (ver 07_VISOR/LEEME.md) y reinicia el visor.</div>`;
+  return cmp + `<button class="ia-btn" id="b-ia">${iaOp[p.id] ? "Ver la opinión de Claude (ya consultada, sin costo)" : "Pedir segunda opinión a Claude"}</button><div id="ia-espera"></div><div id="ia-res"></div><div class="ia-gasto">${textoGasto(servidor.consumo)}</div>`;
+}
+function refrescarGasto(c) { if (!c) return; servidor.consumo = c; document.querySelectorAll(".ia-gasto").forEach(e => e.innerHTML = textoGasto(c)); }
+// Contador de gasto de la API: lo que ya se uso (estimado con los tokens que informa la API) frente al tope
+function textoGasto(c) {
+  if (!c) return "";
+  const pct = Math.min(100, 100 * c.usd / c.tope_usd);
+  return `Gasto de la API: <b>US$ ${c.usd.toFixed(3)}</b> de US$ ${c.tope_usd.toFixed(2)} de tope · ${c.opiniones} opiniones` +
+    `${c.opiniones ? ` (≈ US$ ${(c.usd / c.opiniones).toFixed(3)} cada una)` : ""}<div class="barra"><i style="width:${pct}%"></i></div>`;
+}
+// Pide (o recupera de lo guardado) la opinion de Claude sobre una zona. alMostrar(r) recibe la respuesta o {error}.
+function pedirOpinion(p, alMostrar) {
+  // si ya tiene opinion guardada se lee gratis y sin contrasena; si no, se pide a Claude (eso si pide la contrasena)
+  const guardada = iaOp[p.id] ? fetch(`${API}/api/opinion?clave=${p.clave}&id=${encodeURIComponent(p.id)}`).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null);
+  return guardada.then(g => g || apiProtegida("/api/opinion", {method: "POST", body: JSON.stringify({clave: p.clave, id: p.id})}).then(r => r.json()))
+    .catch(() => ({error: "No se pudo conectar con el servidor del visor."}))
+    .then(r => {
+      if (r.consumo) refrescarGasto(r.consumo);
+      if (!r.error) { iaOp[p.id] = {veredicto: r.veredicto, confianza: r.confianza, que_parece: r.que_parece}; if (objetos[p.id]) pintar(p.id); dibujarLista(); cargarPrecision(); }
+      alMostrar(r); return r;
+    });
+}
+function textoOpinion(r) {
+  const costo = r.desde_cache ? "ya consultada antes: sin costo" : r.uso ? `esta opinión costó ≈ US$ ${r.uso.usd.toFixed(3)} (${r.uso.entrada_tok + r.uso.salida_tok} tokens)` : "";
+  return r.error ? `<div class="alerta">${esc(r.error)}</div>` : `<div class="ia-caja">${cajaIA(r)}${costo ? `<div class="fin">${costo}</div>` : ""}</div>`;
 }
 function activarIA(p) {
+  const c = document.getElementById("b-cmp"); if (c) c.onclick = () => abrirComparacion(p);
   const b = document.getElementById("b-ia"); if (!b) return;
-  const res = document.getElementById("ia-res");
-  const mostrar = r => { res.innerHTML = r.error ? `<div class="alerta">${esc(r.error)}</div>` : `<div class="ia-caja">${cajaIA(r)}</div>`; };
+  const res = document.getElementById("ia-res"), esp = document.getElementById("ia-espera"), txt = b.textContent;
   b.onclick = () => {
-    b.disabled = true; b.textContent = "Claude está mirando la imagen…";
-    fetch("/api/opinion", {method: "POST", body: JSON.stringify({clave: p.clave, id: p.id})}).then(r => r.json()).then(mostrar)
-      .catch(() => mostrar({error: "No se pudo conectar con el servidor del visor."})).finally(() => { b.disabled = false; b.textContent = "Pedir segunda opinión a Claude"; });
+    b.disabled = true; b.textContent = "Claude está mirando la imagen…"; esp.innerHTML = `<div class="ia-espera"><i></i></div>`;
+    pedirOpinion(p, r => { res.innerHTML = textoOpinion(r); }).finally(() => { b.disabled = false; b.textContent = txt; esp.innerHTML = ""; });
   };
+  if (iaOp[p.id]) b.onclick();      // ya consultada: se muestra gratis desde lo guardado
 }
 function enviarEtiqueta(p, estado) {
   if (tipoDe(p.id) !== "an" || !p.clave || !servidor) return;
   const e = {"Parece actividad minera": "mineria", "No parece actividad minera": "no_mineria", "No estoy seguro": "dudoso"}[estado];
   if (!e) return;
-  fetch("/api/etiqueta", {method: "POST", body: JSON.stringify({clave: p.clave, id: p.id, etiqueta: e})}).catch(() => {});
+  api("/api/etiqueta", {method: "POST", body: JSON.stringify({clave: p.clave, id: p.id, etiqueta: e})}).catch(() => {});
+}
+function reenviarRevisiones() { zonasAn().forEach(p => { if (estadoDe(p.id) !== "Sin revisar") enviarEtiqueta(p, estadoDe(p.id)); }); sincronizarRevisiones(); }   // (ya no hace falta clave: se usa al abrir el visor)
+// Manda TODAS mis revisiones (piloto y bloques) al servidor: quedan guardadas en disco y alimentan el archivo de zonas confirmadas para la app
+let _sincRev = null;
+function sincronizarRevisiones(ya) {      // ya = enviar ahora (si no, se espera un instante por si se hacen varios cambios seguidos)
+  if (!servidor) return Promise.resolve();
+  clearTimeout(_sincRev);
+  const enviar = () => {
+    const lista = Object.entries(revision).map(([id, r]) => {
+      const f = TODAS.find(x => x.properties.id === id), p = f ? f.properties : {};
+      return {id, estado: r.estado, nota: r.nota || "", fecha: r.fecha, tipo: tipoDe(id),
+        propiedades: f ? {clave: p.clave, area_ha: p.area_ha, puntaje_modelo: p.puntaje_modelo, lat: p.lat, lng: p.lng, dist_rio_m: p.dist_rio_m, dist_poblado_m: p.dist_poblado_m,
+                          poblado_cercano: p.poblado_cercano, zona_cercana: p.zona_cercana} : {},
+        geometria: f ? f.geometry : null};
+    });
+    return lista.length ? api("/api/revisiones", {method: "POST", body: JSON.stringify({revisiones: lista})}).then(r => r.json()).catch(() => ({})) : Promise.resolve({});
+  };
+  if (ya) return enviar();
+  _sincRev = setTimeout(enviar, 800);
+  return Promise.resolve();
+}
+function montarConfirmadas() {
+  const el = document.getElementById("conf"); if (!el) return;
+  const n = Object.values(revision).filter(r => r.estado === "Parece actividad minera").length;
+  el.innerHTML = `<b style="font-size:12.5px">Zonas que sí parecen minería (mi revisión): ${n}</b>
+    <div class="ia-fila"><button id="b-conf">Descargar para la app (GeoJSON)</button></div>
+    <div class="mini"><small>Se guardan en tu equipo (<b>04_DATOS/etiquetas/zonas_confirmadas.geojson</b>) cada vez que revisas; ese archivo se carga en la sección "Detecciones revisadas" de la app.</small></div>`;
+  document.getElementById("b-conf").onclick = async () => {
+    await sincronizarRevisiones(true);
+    const r = await api("/api/confirmadas").then(x => x.json()).catch(() => ({error: "No se pudo conectar con el servidor."}));
+    if (r.error) { el.insertAdjacentHTML("beforeend", `<div class="alerta">${esc(r.error)}</div>`); return; }
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(r)], {type: "application/geo+json"}));
+    a.download = "zonas_confirmadas.geojson"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+}
+
+// ---- Usuario y contrasena: SOLO para las acciones con inteligencia artificial (opinion de Claude, revision en lote, aprendizaje). Todo lo demas es libre.
+const api = (ruta, opc) => { opc = opc || {}; return fetch(API + ruta, {...opc, headers: {...(opc.headers || {}), ...(acceso ? {"X-Usuario": acceso.u, "X-Acceso": acceso.c} : {})}}); };
+async function apiProtegida(ruta, opc) {
+  let r = await api(ruta, opc);
+  if (r.status === 401) {
+    const d = await r.clone().json().catch(() => ({}));
+    if (await pedirAcceso(acceso ? d.error : "")) r = await api(ruta, opc);
+  }
+  return r;
+}
+function pedirAcceso(aviso) {
+  return new Promise(res => {
+    const m = document.getElementById("acceso"), inp = document.getElementById("acc-clave"), msg = document.getElementById("acc-msg"), usu = document.getElementById("acc-usuario");
+    m.classList.add("abierta"); inp.value = ""; msg.textContent = aviso || ""; if (acceso) usu.value = acceso.u; setTimeout(() => (usu.value ? inp : usu).focus(), 50);
+    const cerrar = ok => { m.classList.remove("abierta"); document.getElementById("acc-ok").onclick = document.getElementById("acc-no").onclick = inp.onkeydown = usu.onkeydown = null; res(ok); };
+    const entrar = async () => {
+      const u = document.getElementById("acc-usuario").value.trim(), prueba = inp.value; if (!u || !prueba) return;
+      const r = await fetch(API + "/api/acceso", {method: "POST", headers: {"X-Usuario": u, "X-Acceso": prueba}}).catch(() => null);
+      if (r && r.ok) {
+        acceso = {u, c: prueba};
+        try { (document.getElementById("acc-recordar").checked ? localStorage : sessionStorage).setItem("g4g_acceso_ia", JSON.stringify(acceso)); } catch (e) {}
+        cerrar(true);
+      } else msg.textContent = r ? ((await r.json().catch(() => ({}))).error || "No se pudo entrar.") : "No se pudo conectar con el servidor.";
+    };
+    document.getElementById("acc-ok").onclick = entrar; document.getElementById("acc-no").onclick = () => cerrar(false);
+    inp.onkeydown = usu.onkeydown = e => { if (e.key === "Enter") entrar(); };
+  });
+}
+
+function fijarRevision(id, estado) {    // mi revision desde un boton (la ficha lo hace con su lista desplegable)
+  revision[id] = {estado, nota: (revision[id] && revision[id].nota) || "", fecha: new Date().toISOString().slice(0, 10)};
+  guardar(); pintar(id); dibujarLista(); enviarEtiqueta(objetos[id].p, estado); sincronizarRevisiones(); if (activa === id) elegir(id, false);
+}
+const getJSON = url => fetch(API + url).then(r => r.json()).then(d => { if (d && d.error) throw new Error(d.error); return d; });
+
+// =====================================================================================
+//  PANEL DE CLAUDE: elegir zonas, pedirle su opinion en lote, comparar modelo vs Claude, aprendizaje del modelo
+// =====================================================================================
+let loteActivo = false, claveSel = null;
+const zonasAn = () => TODAS.map(f => f.properties).filter(p => tipoDe(p.id) === "an");
+const costoUnit = () => { const c = servidor && servidor.consumo; return c && c.opiniones ? c.usd / c.opiniones : 0.014; };
+
+function montarPanelIA() {
+  const det = document.getElementById("ia-panel"), cuerpo = document.getElementById("ia-cuerpo");
+  if (!servidor) return; det.style.display = "block";   // queda cerrado hasta que la persona lo abra (para no tapar la lista)
+  const hay = !!analisisActual;
+  cuerpo.innerHTML = (hay ? `<div class="mini"><small>Marca con la casilla las zonas de la lista que quieras que Claude revise.</small></div>
+    <div class="ia-fila"><button id="s-todas">Todas</button><button id="s-inc">Dudosas del modelo (&lt; ${DUDOSO_MAX})</button><button id="s-sin">Sin consultar</button><button id="s-ninguna">Ninguna</button></div>
+    <button class="ia-btn" id="b-lote"></button><div class="mini" id="lote-nota"></div><div id="lote-prog"></div>
+    <label class="mini">Mostrar en la lista: <select id="filtro-ia"><option value="todas">Todas las zonas</option><option value="probable_mineria">Claude: parece minería</option>
+      <option value="dudoso">Claude: dudosas</option><option value="probable_no_mineria">Claude: no parece minería</option><option value="sin">Sin consultar a Claude</option></select></label>
+    <div class="ia-fila"><button id="b-sel-csv">Descargar la selección de Claude (CSV)</button></div>`
+    : `<div class="mini"><small>Analiza un bloque para elegir zonas y pedirle a Claude su opinión.</small></div>`) +
+    `<div class="ia-gasto">${textoGasto(servidor.consumo)}</div>
+    <h4>Modelo vs Claude</h4><div id="ia-precision" class="mini"></div>
+    <h4>Aprendizaje del modelo</h4><div id="ia-aprende" class="mini"></div>`;
+  if (hay) {
+    const fijar = f => { sel = new Set(zonasAn().filter(f).map(p => p.id)); actualizarSel(); };
+    document.getElementById("s-todas").onclick = () => fijar(() => true);
+    document.getElementById("s-inc").onclick = () => fijar(p => p.puntaje_modelo < DUDOSO_MAX);
+    document.getElementById("s-sin").onclick = () => fijar(p => !iaOp[p.id]);
+    document.getElementById("s-ninguna").onclick = () => fijar(() => false);
+    document.getElementById("b-lote").onclick = iniciarLote;
+    const fi = document.getElementById("filtro-ia"); fi.value = filtroIA; fi.onchange = () => { filtroIA = fi.value; dibujarLista(); };
+    document.getElementById("b-sel-csv").onclick = () => bajar("seleccion_claude.csv",
+      [["id", "lat", "lng", "area_ha", "puntaje_modelo", "claude_veredicto", "claude_confianza", "claude_que_parece", "mi_revision"]].concat(
+        zonasAn().filter(p => iaOp[p.id]).map(p => [p.id, p.lat, p.lng, p.area_ha, p.puntaje_modelo, iaOp[p.id].veredicto, iaOp[p.id].confianza, iaOp[p.id].que_parece, estadoDe(p.id)])));
+    actualizarSel();
+  }
+  cargarPrecision(); cargarAprendizaje();
+}
+function actualizarSel() {
+  document.querySelectorAll(".fila input.sel").forEach(cb => { cb.checked = sel.has(cb.closest(".fila").dataset.id); });
+  if (claveSel) try { localStorage.setItem("g4g_sel_" + claveSel, JSON.stringify([...sel])); } catch (e) {}
+  const b = document.getElementById("b-lote"); if (!b) return;
+  const ids = [...sel].filter(id => objetos[id]), nuevas = ids.filter(id => !iaOp[id]), est = nuevas.length * costoUnit();
+  const c = servidor.consumo || {usd: 0, tope_usd: 2};
+  b.disabled = !servidor.ia || !nuevas.length || loteActivo;
+  b.textContent = !servidor.ia ? "Falta la clave de la API de Claude (ver LEEME)" : !ids.length ? "Elige zonas con las casillas de la lista"
+    : !nuevas.length ? "Las zonas elegidas ya fueron consultadas (sin costo)" : `Revisar con Claude ${nuevas.length} zonas · ≈ US$ ${est.toFixed(2)}`;
+  document.getElementById("lote-nota").textContent = (servidor.ia && nuevas.length && c.usd + est > c.tope_usd) ? "Esto supera el tope de gasto: Claude se detendrá al llegar al tope." : "";
+}
+async function iniciarLote() {
+  const ids = [...sel].filter(id => objetos[id] && !iaOp[id]); if (!ids.length || loteActivo) return;
+  const clave = objetos[ids[0]].p.clave, prog = document.getElementById("lote-prog"); loteActivo = true; actualizarSel();
+  prog.innerHTML = `<div class="mini">Enviando las zonas a Claude…</div><div class="ia-espera"><i></i></div>`;
+  let r; try { r = await apiProtegida("/api/lote", {method: "POST", body: JSON.stringify({clave, ids})}).then(x => x.json()); } catch (e) { r = {error: "No se pudo conectar con el servidor del visor."}; }
+  if (r.error) { prog.innerHTML = `<div class="alerta">${esc(r.error)}</div>`; loteActivo = false; actualizarSel(); return; }
+  const t = setInterval(async () => {
+    let e; try { e = await getJSON("/api/lote?id=" + r.id); } catch (err) { clearInterval(t); loteActivo = false; actualizarSel(); return; }
+    refrescarGasto(e.consumo);
+    const pct = Math.round(100 * e.hechas / e.total), ok = e.estado === "listo";
+    prog.innerHTML = `<div class="mini">${ok ? "Listo: " : ""}Claude revisó <b>${e.hechas}</b> de ${e.total} zonas · gasto total US$ ${e.consumo.usd.toFixed(3)}` +
+      `${e.errores.length ? ` · ${e.errores.length} con problema` : ""}</div><div class="barra ia"><i style="width:${pct}%"></i></div>` +
+      (ok && e.errores.length ? `<div class="alerta">${esc(e.errores[0])}</div>` : "");
+    if (ok) { clearInterval(t); loteActivo = false; sel = new Set(); await cargarOpiniones(); cargarAprendizaje(); }
+  }, 1000);
+}
+async function cargarOpiniones(claves) {
+  claves = claves || [...new Set(zonasAn().map(p => p.clave))];
+  for (const c of claves) { try { Object.assign(iaOp, await getJSON("/api/opiniones?clave=" + c)); } catch (e) { /* sin servidor */ } }
+  zonasAn().forEach(p => { if (objetos[p.id]) pintar(p.id); });
+  dibujarLista(); actualizarSel(); cargarPrecision();
+}
+const barraP = (txt, pct, extra) => `<div class="pbar"><span class="t">${txt}</span><span class="b"><i style="width:${pct == null ? 0 : pct}%"></i></span><span>${pct == null ? "—" : pct + " %"}${extra || ""}</span></div>`;
+function cargarPrecision() {
+  const el = document.getElementById("ia-precision"); if (!el || !servidor) return;
+  getJSON("/api/precision").then(d => {
+    if (!d.n_zonas) { el.innerHTML = `<small>Aún no hay opiniones de Claude. Elige zonas y pídele que las revise: aquí verás cuántas veces confirma lo que marcó el modelo.</small>`; return; }
+    let h = `Claude revisó <b>${d.n_zonas}</b> zonas del modelo: <b>${d.claude_mineria}</b> parecen minería · ${d.claude_dudoso} dudosas · ${d.claude_no_mineria} no parecen.` +
+      barraP("Precisión", d.precision_estimada_pct) +
+      `<small>Precisión = zonas que Claude confirma ÷ (confirma + descarta); las dudosas no cuentan. Es la opinión de una IA sobre una imagen de 20 m, no verdad de campo.</small>`;
+    h += `<div style="margin-top:6px"><b>Según el puntaje del modelo</b></div>` + d.por_banda.filter(b => b.n).map(b => barraP(b.banda, b.precision_pct, ` <small>(${b.n})</small>`)).join("");
+    if (d.por_modelo && d.por_modelo.length > 1) h += `<div style="margin-top:6px"><b>Por versión del modelo</b></div>` + d.por_modelo.map(m => barraP(m.modelo, m.precision_pct, ` <small>(${m.n})</small>`)).join("");
+    if (d.humano_vs_claude && d.humano_vs_claude.n) h += `<div style="margin-top:6px">Coincide con tus revisiones en <b>${d.humano_vs_claude.pct} %</b> <small>(${d.humano_vs_claude.n} zonas)</small></div>`;
+    el.innerHTML = h;
+  }).catch(e => { el.innerHTML = `<small>${esc(e.message)}</small>`; });
+}
+let pollApr = null;
+function cargarAprendizaje() {
+  const el = document.getElementById("ia-aprende"); if (!el || !servidor) return; clearTimeout(pollApr);
+  getJSON("/api/aprendizaje").then(d => {
+    const u = d.ultima, pr = d.progreso || {};
+    let h = `Modelo activo: <b>${esc(d.modelo_activo)}</b><br>Revisiones para aprender: <b>${d.n_etiquetas}</b> <small>(${d.n_humano} tuyas · ${d.n_claude} de Claude)</small> · <b>${d.n_nuevas}</b> nuevas`;
+    if (d.corriendo) h += `<div class="mini">${esc(pr.mensaje || "Aprendiendo…")}</div><div class="barra ia"><i style="width:${Math.round(100 * (pr.frac || 0.05))}%"></i></div>`;
+    else h += `<div class="ia-fila"><button class="primario" id="b-aprender">Aprender ahora</button></div>` +
+      `<small>${d.recomendado ? "Hay revisiones nuevas de sobra: el modelo aprende solo al terminar de revisar." : "El modelo aprende solo al juntar 10 revisiones nuevas; también puedes forzarlo."}</small>`;
+    if (d.error) h += `<div class="alerta">${esc(d.error)}</div>`;
+    if (u) {
+      h += `<div style="margin-top:6px"><b>Última vez</b> <small>${esc(u.fecha || "")}</small></div>` +
+        barraP("Antes", u.acuerdo_antes == null ? null : Math.round(u.acuerdo_antes)) + barraP("Después", u.acuerdo_despues == null ? null : Math.round(u.acuerdo_despues)) +
+        `<small>Coincidencia del modelo con Claude y las personas en zonas que no había visto (${u.n_zonas_eval || 0} zonas). Cuanto más sube, menos depende de Claude.</small>` +
+        `<div class="mini">${u.promovido ? `Modelo nuevo <b>activado</b> (${esc(u.version)}).` : `No se activó el modelo nuevo: ${esc(u.motivo || "")}`}</div>`;
+      const dep = u.acuerdo_despues; if (dep != null) h += `<div class="mini"><small>${dep >= 90 ? "Ya coincide casi siempre: se puede consultar a Claude solo en las dudosas del modelo." : "Meta: pasar de 90 % para pedir la opinión de Claude solo en las zonas dudosas."}</small></div>`;
+    }
+    el.innerHTML = h;
+    const b = document.getElementById("b-aprender");
+    if (b) b.onclick = () => { b.disabled = true; apiProtegida("/api/aprender", {method: "POST"}).then(x => x.json()).then(d => { if (d.error) el.insertAdjacentHTML("beforeend", `<div class="alerta">${esc(d.error)}</div>`); else cargarAprendizaje(); }); };
+    if (d.corriendo) pollApr = setTimeout(cargarAprendizaje, 2000);
+    else if (d.modelo_activo && servidor.modelo_version && d.modelo_activo !== servidor.modelo_version) servidor.modelo_version = d.modelo_activo;
+  }).catch(e => { el.innerHTML = `<small>${esc(e.message)}</small>`; });
+}
+
+// =====================================================================================
+//  VENTANA DE COMPARACION: antes (imagen historica de Esri) y despues (Sentinel-2 2026), con cortina deslizante
+// =====================================================================================
+let cmAsp = 2.0, cm = null, cmWb = null, cmCapas = [], cmP = null, cmInfo = null, cmX = 0.5;
+const cmTir = document.getElementById("cmp-tirador");
+function clipLado() {
+  if (!cm) return;
+  const s = cm.getSize(), nw = cm.containerPointToLayerPoint([0, 0]), se = cm.containerPointToLayerPoint(s), x = cm.containerPointToLayerPoint([s.x * cmX, 0]).x;
+  cm.getPane("izq").style.clip = `rect(${nw.y}px, ${x}px, ${se.y}px, ${nw.x}px)`;
+  cm.getPane("der").style.clip = `rect(${nw.y}px, ${se.x}px, ${se.y}px, ${x}px)`;
+}
+function ponerTirador(f) { cmX = Math.max(0.02, Math.min(0.98, f)); cmTir.style.left = (cmX * 100) + "%"; clipLado(); }
+(() => {
+  const mover = e => { const r = document.getElementById("cmp-mapa").getBoundingClientRect(), x = (e.touches ? e.touches[0].clientX : e.clientX); ponerTirador((x - r.left) / r.width); };
+  const soltar = () => { window.removeEventListener("mousemove", mover); window.removeEventListener("touchmove", mover); window.removeEventListener("mouseup", soltar); window.removeEventListener("touchend", soltar); };
+  const agarrar = e => { e.preventDefault(); e.stopPropagation(); window.addEventListener("mousemove", mover); window.addEventListener("touchmove", mover, {passive: true}); window.addEventListener("mouseup", soltar); window.addEventListener("touchend", soltar); };
+  cmTir.addEventListener("mousedown", agarrar); cmTir.addEventListener("touchstart", agarrar, {passive: false});
+})();
+function cerrarComparacion() { document.getElementById("comparar").classList.remove("abierta"); if (cm) { cm.remove(); cm = null; } }
+document.getElementById("cmp-cerrar").onclick = cerrarComparacion;
+document.getElementById("comparar").addEventListener("mousedown", e => { if (e.target.id === "comparar") cerrarComparacion(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") cerrarComparacion(); });
+
+async function abrirComparacion(p) {
+  cmP = p; document.getElementById("comparar").classList.add("abierta");
+  const rc = document.getElementById("cmp-mapa").getBoundingClientRect(), rel = rc.width / Math.max(rc.height, 1);
+  cmAsp = rel < 0.8 ? 0.6 : rel < 1.4 ? 1.0 : 2.0;      // la imagen se pide con la forma de la pantalla (celular vertical o escritorio)
+  document.getElementById("cmp-tit").textContent = `${p.id} · ${p.area_ha} ha · puntaje del modelo ${p.puntaje_modelo}`;
+  const pie = document.getElementById("cmp-pie"); pie.innerHTML = `<div class="col">Armando las imágenes…</div>`;
+  try { cmInfo = await getJSON(`/api/recorte_info?clave=${p.clave}&id=${encodeURIComponent(p.id)}&asp=${cmAsp}`); }
+  catch (e) { pie.innerHTML = `<div class="col"><div class="error">${esc(e.message)}</div></div>`; return; }
+  if (!cmWb) { try { cmWb = await getJSON("/api/wayback"); } catch (e) { cmWb = []; } }
+  const sa = document.getElementById("cmp-antes");
+  sa.innerHTML = cmWb.map(x => `<option value="${x.fecha}">${x.fecha} (Esri)</option>`).join("") || `<option value="">Sin conexión a las imágenes históricas</option>`;
+  const ini = cmWb.find(x => x.fecha >= "2019-01-01"); if (ini) sa.value = ini.fecha;
+  document.getElementById("cmp-calor").disabled = !cmInfo.capas.includes("puntaje");
+  const sh = document.getElementById("cmp-ahora");
+  sh.querySelectorAll("option").forEach(o => { if (o.value === "falso") o.disabled = !cmInfo.capas.includes("falso"); if (o.value === "sentinel") o.disabled = !cmInfo.capas.includes("natural"); });
+  sh.value = cmInfo.capas.includes("natural") ? "sentinel" : "esri";      // sin la imagen guardada (analisis traido del respaldo) se usa la de Esri
+  if (cm) cm.remove();
+  cm = L.map("cmp-mapa", {attributionControl: false, maxZoom: 19, zoomSnap: 0.25});
+  cm.createPane("izq").style.zIndex = 400; cm.createPane("der").style.zIndex = 401; cm.createPane("cont").style.zIndex = 450;
+  const b = L.latLngBounds(cmInfo.bounds); cm.fitBounds(b); cm.setMaxBounds(b.pad(0.2)); cm.setMinZoom(cm.getZoom() - 1);
+  cm.on("move zoom viewreset resize", clipLado);
+  armarCapas(); ponerTirador(0.5); pieComparacion(p);
+}
+function armarCapas() {
+  if (!cm) return; cmCapas.forEach(l => cm.removeLayer(l)); cmCapas = [];
+  const b = L.latLngBounds(cmInfo.bounds), url = c => `${API}/api/recorte.png?clave=${cmP.clave}&id=${encodeURIComponent(cmP.id)}&capa=${c}&asp=${cmAsp}`;
+  const fa = document.getElementById("cmp-antes").value, ah = document.getElementById("cmp-ahora").value, wb = cmWb.find(x => x.fecha === fa);
+  const meter = l => { l.addTo(cm); cmCapas.push(l); };
+  if (wb) meter(L.tileLayer(wb.url, {pane: "izq", maxNativeZoom: 17, maxZoom: 19}));
+  let etiAhora;
+  if (ah === "esri" && cmWb.length) { meter(L.tileLayer(cmWb[cmWb.length - 1].url, {pane: "der", maxNativeZoom: 17, maxZoom: 19})); etiAhora = `AHORA · Esri ${cmWb[cmWb.length - 1].fecha}`; }
+  else { meter(L.imageOverlay(url(ah === "falso" ? "falso" : "natural"), b, {pane: "der"})); etiAhora = ah === "falso" ? "AHORA · Sentinel-2 falso color (mayo–sep 2026)" : "AHORA · Sentinel-2 (mayo–sep 2026)"; }
+  if (document.getElementById("cmp-calor").checked && cmInfo.capas.includes("puntaje")) { meter(L.imageOverlay(url("puntaje"), b, {pane: "der", opacity: .9})); etiAhora += " + puntaje del modelo"; }
+  if (document.getElementById("cmp-contorno").checked) {
+    const f = TODAS.find(x => x.properties.id === cmP.id);
+    if (f) meter(L.geoJSON(f, {pane: "cont", style: {color: "#7048e8", weight: 3, fill: false, dashArray: "6 4"}, interactive: false}));
+  }
+  document.getElementById("cmp-izq").textContent = wb ? `ANTES · Esri ${wb.fecha}` : "ANTES · sin imagen histórica (¿hay internet?)";
+  document.getElementById("cmp-der").textContent = etiAhora;
+  clipLado();
+}
+["cmp-antes", "cmp-ahora", "cmp-contorno", "cmp-calor"].forEach(i => document.getElementById(i).onchange = armarCapas);
+function pieComparacion(p) {
+  const pie = document.getElementById("cmp-pie"), est = estadoDe(p.id);
+  pie.innerHTML = `<div class="col"><b>Qué mirar</b><div class="mini">Minería aluvial: monte (verde oscuro) que pasa a suelo claro, con pozas de agua turbia, montículos y caminos nuevos. Si en el "antes" ya era suelo claro o río, probablemente no es minería nueva. Arrastra la barra blanca para comparar.</div>
+      <div class="nota">Antes = mapa histórico de Esri (la fecha es la de la versión del mapa; la foto puede ser anterior y no todos los lugares cambian entre versiones). Ahora = Sentinel-2 de 2026, la imagen que usa el modelo. Contorno morado = zona marcada por el modelo.</div></div>
+    <div class="col"><b>Claude</b><div id="cmp-ia" class="mini"></div></div>
+    <div class="col"><b>Mi revisión</b><div class="ia-fila" id="cmp-rev">${OPCIONES.slice(1).map(o => `<button data-e="${esc(o)}" ${o === est ? 'class="primario"' : ""}>${esc(o)}</button>`).join("")}</div>
+      <div class="nota">Tu revisión también le enseña al modelo.</div></div>`;
+  pie.querySelectorAll("#cmp-rev button").forEach(b => b.onclick = () => { fijarRevision(p.id, b.dataset.e); pieComparacion(p); });
+  const ia = document.getElementById("cmp-ia");
+  if (!servidor.ia) { ia.innerHTML = `<small>Segunda opinión desactivada (falta la clave de la API).</small>`; return; }
+  const pedir = () => { ia.innerHTML = `<div class="ia-espera"><i></i></div>`; pedirOpinion(p, r => { ia.innerHTML = textoOpinion(r); }); };
+  if (iaOp[p.id]) pedir();
+  else { ia.innerHTML = `<button class="ia-btn" id="cmp-pedir">Pedir opinión de Claude (≈ US$ ${costoUnit().toFixed(2)})</button>`; document.getElementById("cmp-pedir").onclick = pedir; }
 }
 
 // ---- Descargas (CSV con BOM para que Excel lea las tildes)
@@ -298,16 +678,51 @@ function pantallaInicio() {
   quitarBarrido();
   const sin = !servidor;
   mostrar(`<h3>Analizar una zona</h3>
-    <p>Dibuja un recuadro en cualquier lugar del mapa y el modelo marcará las zonas con parecido a posible actividad minera.</p>
+    <p class="intro">Dibuja un recuadro en cualquier lugar del mapa y el modelo marcará las zonas con parecido a posible actividad minera.</p>
     ${sin ? `<div class="alerta">Para analizar necesitas abrir el visor con <b>EJECUTAR-VISOR.bat</b>. Así solo se puede ver la lista del piloto.</div>` : ""}
     <div class="buscar"><input type="text" id="q-lugar" placeholder="Ir a un lugar: ej. La Pampa, Madre de Dios"><button id="b-ir">Ir</button></div>
     <div class="fila-b"><button class="primario" id="b-dibujar" ${sin ? "disabled" : ""}>Dibujar un bloque</button>
-    <button id="b-piloto">Ver zona piloto</button>${analisisActual ? '<button id="b-quitar">Quitar análisis</button>' : ""}</div>`);
+    <button id="b-piloto">Ver zona piloto</button>${analisisActual ? '<button id="b-quitar">Quitar análisis</button>' : ""}</div><div id="hist" style="margin-top:10px"></div><div id="conf" style="margin-top:10px"></div><div id="resp" style="margin-top:10px"></div>`);
+  cargarHistorial(); montarConfirmadas(); montarRespaldo();
   document.getElementById("b-dibujar").onclick = empezarDibujo;
   document.getElementById("b-piloto").onclick = () => mapa.fitBounds(vistaPiloto);
   if (document.getElementById("b-quitar")) document.getElementById("b-quitar").onclick = quitarAnalisis;
   const ir = () => irA(document.getElementById("q-lugar").value);
   document.getElementById("b-ir").onclick = ir; document.getElementById("q-lugar").onkeydown = e => { if (e.key === "Enter") ir(); };
+}
+// Respaldo cifrado en el repo: llevar lo analizado a otro equipo (el repo es publico: solo queda texto cifrado)
+function montarRespaldo() {
+  const el = document.getElementById("resp"); if (!el || !servidor) return;
+  getJSON("/api/respaldo").then(e => {
+    el.innerHTML = `<b style="font-size:12.5px">Respaldo en el repo (cifrado)</b>
+      <div class="ia-fila"><button id="b-resp-exp">Guardar en el repo</button><button id="b-resp-imp">Traer del repo</button></div>
+      <div class="mini" id="resp-txt"><small>${e.existe ? `Último respaldo: ${esc(e.fecha)} (${Math.round(e.bytes / 1024)} KB). ` : "Todavía no hay respaldo. "}Guarda los bloques analizados, las opiniones de Claude, tus revisiones y los modelos que aprendieron. Se sube con git; en el otro equipo pon la misma clave del respaldo (archivo clave_respaldo.txt).</small></div>`;
+    const txt = document.getElementById("resp-txt");
+    const hacer = (ruta, ok) => async () => {
+      txt.innerHTML = "<small>Trabajando…</small>";
+      const r = await api(ruta, {method: "POST"}).then(x => x.json()).catch(() => ({error: "No se pudo conectar con el servidor."}));
+      txt.innerHTML = r.error ? `<div class="alerta">${esc(r.error)}</div>` : `<small>${ok(r)}</small>`;
+      if (!r.error) { cargarHistorial(); }
+    };
+    document.getElementById("b-resp-exp").onclick = hacer("/api/respaldo/exportar", r => `Guardado: ${r.archivos} archivos, ${Math.round(r.bytes / 1024)} KB, en <b>${esc(r.ruta)}</b>. Falta subirlo con git (commit y push).`);
+    document.getElementById("b-resp-imp").onclick = hacer("/api/respaldo/importar", r => { const n = r.nuevos, t = n.analisis + n.opiniones + n.revisiones + n.modelos; return t ? `Se agregó: ${n.analisis} análisis, ${n.opiniones} opiniones, ${n.revisiones} revisiones, ${n.modelos} archivos de modelo.` : "Ya tenías todo lo que hay en el respaldo."; });
+  }).catch(() => {});
+}
+function cargarHistorial() {      // bloques analizados antes: siguen guardados aunque se cierre el visor
+  const el = document.getElementById("hist"); if (!el || !servidor) return;
+  getJSON("/api/historial").then(h => {
+    if (!h.length) { el.innerHTML = ""; return; }
+    el.innerHTML = `<b style="font-size:12.5px">Bloques analizados antes</b>` + h.slice(0, 6).map((x, i) =>
+      `<div class="hist-fila" data-i="${i}"><span>${x.bloque_km ? x.bloque_km[0] + " × " + x.bloque_km[1] + " km" : "Bloque"} · ${x.n_zonas == null ? "?" : x.n_zonas} zonas</span><small>${esc(x.fecha)}</small></div>`).join("");
+    el.querySelectorAll(".hist-fila").forEach(d => d.onclick = () => abrirAnterior(h[+d.dataset.i]));
+  }).catch(() => {});
+}
+async function abrirAnterior(x) {
+  try {
+    const r = await getJSON("/api/analisis?clave=" + x.clave), b = r.bbox;
+    quitarBloque(); bloque = L.rectangle([[b[1], b[0]], [b[3], b[2]]], {color: "#7048e8", weight: 2, fillOpacity: .04, dashArray: "4 4"}).addTo(mapa);
+    mapa.fitBounds(bloque.getBounds().pad(0.15)); resultado(r);
+  } catch (e) { alert("No se pudo abrir ese análisis: " + e.message); }
 }
 async function irA(texto) {
   if (!texto.trim()) return;
@@ -319,17 +734,26 @@ async function irA(texto) {
 }
 
 function empezarDibujo() {
-  quitarBloque(); dibujando = true; ancla = null;
+  quitarBloque(); dibujando = true; ancla = null; document.body.classList.add("dibujando");
   mapa.dragging.disable(); mapa.doubleClickZoom.disable(); mapa.getContainer().style.cursor = "crosshair";
   mostrar(`<h3>Dibuja el bloque</h3><p>Mantén presionado el botón del mouse y arrastra sobre el mapa. Tamaño máximo: ${servidor.max_lado_km} × ${servidor.max_lado_km} km
     (acércate si hace falta; la escala abajo a la izquierda te guía).</p><div class="fila-b"><button id="b-cancelar">Cancelar</button></div>`);
   document.getElementById("b-cancelar").onclick = () => { finDibujo(); quitarBloque(); pantallaInicio(); };
 }
-function finDibujo() { dibujando = false; mapa.dragging.enable(); mapa.doubleClickZoom.enable(); mapa.getContainer().style.cursor = ""; }
+function finDibujo() { dibujando = false; document.body.classList.remove("dibujando"); mapa.dragging.enable(); mapa.doubleClickZoom.enable(); mapa.getContainer().style.cursor = ""; }
 function quitarBloque() { if (bloque) { mapa.removeLayer(bloque); bloque = null; } quitarBarrido(); }
-mapa.on("mousedown", e => { if (!dibujando) return; ancla = e.latlng; bloque = L.rectangle([ancla, ancla], {color: "#7048e8", weight: 2, fillOpacity: .12}).addTo(mapa); });
-mapa.on("mousemove", e => { if (dibujando && ancla && bloque) { bloque.setBounds([ancla, e.latlng]); medida(); } });
-mapa.on("mouseup", () => { if (dibujando && ancla && bloque) { ancla = null; finDibujo(); confirmar(); } });
+// Dibujo con mouse o con el dedo (eventos de puntero)
+const contMapa = mapa.getContainer();
+const aLatLng = e => mapa.mouseEventToLatLng(e);
+contMapa.addEventListener("pointerdown", e => {
+  if (!dibujando || e.target.closest("#tarjeta, .leaflet-control")) return;
+  e.preventDefault(); const sl = window.getSelection(); if (sl) sl.removeAllRanges();
+  try { contMapa.setPointerCapture(e.pointerId); } catch (err) {}
+  ancla = aLatLng(e); bloque = L.rectangle([ancla, ancla], {color: "#7048e8", weight: 2, fillOpacity: .12}).addTo(mapa);
+});
+contMapa.addEventListener("pointermove", e => { if (dibujando && ancla && bloque) { bloque.setBounds([ancla, aLatLng(e)]); medida(); } });
+const soltarDibujo = () => { if (dibujando && ancla && bloque) { ancla = null; finDibujo(); confirmar(); } };
+contMapa.addEventListener("pointerup", soltarDibujo); contMapa.addEventListener("pointercancel", soltarDibujo);
 
 function medida() {
   const km = kmDe(bloque.getBounds()), ok = medidaOk(km);
@@ -365,21 +789,27 @@ async function analizar() {
   pintarEtapas(0, 0, "Enviando el bloque al modelo", 0, 0);
   let id;
   try {
-    const r = await fetch("/api/analizar", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({bbox: caja, sensibilidad: sens})});
+    const r = await api("/api/analizar", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({bbox: caja, sensibilidad: sens})});
     const d = await r.json(); if (!r.ok) throw new Error(d.error || "No se pudo iniciar el análisis."); id = d.id;
   } catch (e) { return fallo(e.message); }
   const t = setInterval(async () => {
     try {
-      const e = await (await fetch("/api/estado?id=" + id)).json();
+      const e = await (await fetch(API + "/api/estado?id=" + id)).json();
       if (e.estado === "corriendo") pintarEtapas(e.etapa, e.etapa_frac, e.mensaje, e.progreso, e.transcurrido_s);
       else { clearInterval(t); if (e.estado === "listo") resultado(e.resultado); else fallo(e.error); }
     } catch (err) { clearInterval(t); fallo("Se perdió la conexión con el servidor local."); }
   }, 600);
 }
 function pintarEtapas(etapa, frac, msg, prog, seg) {
+  const ancho = Math.max(3, Math.round(prog * 100)) + "%", texto = `${esc(msg)} · ${Math.round(prog * 100)}% · ${Math.round(seg || 0)} s`;
+  const ul = tarjeta.querySelector("ul.etapas");
+  if (ul && ul.children.length === servidor.etapas.length) {   // la tarjeta ya esta en pantalla: se actualiza en el lugar (sin reconstruirla, para que no parpadee)
+    [...ul.children].forEach((li, i) => { const c = i < etapa ? "hecha" : i === etapa ? "activa" : ""; if (li.className !== c) li.className = c; });
+    tarjeta.querySelector(".barra i").style.width = ancho; tarjeta.querySelector(".msg").innerHTML = texto;
+    return;
+  }
   const lis = servidor.etapas.map((n, i) => `<li class="${i < etapa ? "hecha" : i === etapa ? "activa" : ""}"><span class="ico"></span>${esc(n)}</li>`).join("");
-  mostrar(`<h3>Analizando el bloque</h3><ul class="etapas">${lis}</ul><div class="barra"><i style="width:${Math.max(3, Math.round(prog * 100))}%"></i></div>
-    <div class="msg">${esc(msg)} · ${Math.round(prog * 100)}% · ${Math.round(seg || 0)} s</div>`);
+  mostrar(`<h3>Analizando el bloque</h3><ul class="etapas">${lis}</ul><div class="barra"><i style="width:${ancho}"></i></div><div class="msg">${texto}</div>`);
 }
 function fallo(texto) {
   quitarBarrido();
@@ -395,6 +825,9 @@ function contar(el, hasta, dec) {   // numero que sube con animacion
 function resultado(r) {
   quitarBarrido(); const R = r.resumen, fs = r.zonas.features;
   quitarAnalisis(true); analisisActual = fs.map(f => f.properties.id);
+  iaOp = {}; filtroIA = "todas"; claveSel = R.clave;
+  try { sel = new Set(JSON.parse(localStorage.getItem("g4g_sel_" + R.clave) || "[]")); } catch (e) { sel = new Set(); }   // las zonas elegidas se recuerdan
+  montarPanelIA(); cargarOpiniones([R.clave]);   // si el bloque ya tenia opiniones de Claude, se ven de una vez
   if (bloque) { bloque.setStyle({dashArray: "4 4", fillOpacity: .04}); }
   // las zonas aparecen una por una, con una onda al entrar
   fs.forEach((f, i) => setTimeout(() => {
@@ -420,14 +853,15 @@ function resultado(r) {
 function quitarAnalisis(silencioso) {
   (analisisActual || []).forEach(id => { const o = objetos[id]; if (o) { o.grupo.removeLayer(o.poli); o.grupo.removeLayer(o.punto); delete objetos[id];
     const i = TODAS.findIndex(f => f.properties.id === id); if (i >= 0) TODAS.splice(i, 1); } });
+  (analisisActual || []).forEach(id => delete iaOp[id]); sel = new Set(); filtroIA = "todas"; claveSel = null;
   analisisActual = null; dibujarLista();
-  if (silencioso !== true) { quitarBloque(); pantallaInicio(); }
+  if (silencioso !== true) { quitarBloque(); pantallaInicio(); montarPanelIA(); }
 }
 
 // ---- Arranque: detecta si el visor se abrio con el servidor local
 dibujarLista(); pantallaInicio();
 if (location.protocol.startsWith("http")) {
-  fetch("/api/salud").then(r => r.json()).then(d => { if (d.ok && d.modelo) { servidor = d; pantallaInicio(); } }).catch(() => {});
+  fetch(API + "/api/salud").then(r => r.json()).then(d => { if (d.ok && d.modelo) { servidor = d; pantallaInicio(); montarPanelIA(); sincronizarRevisiones(); } }).catch(() => {});
 }
 </script>
 </body>

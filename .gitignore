@@ -70,3 +70,13 @@ Thumbs.db
 # Clave de la API de Claude (nunca a git)
 clave_api.txt
 .env
+# Aprendizaje del modelo con las revisiones (estado local, derivado de zonas sin verificar)
+04_DATOS/resultados/modelo_lgbm_aprendido_*.txt
+04_DATOS/resultados/modelo_activo.json
+04_DATOS/resultados/modelos_aprendizaje.json
+acceso_ia.txt
+# Zonas que la persona marco como "parece actividad minera" y sus revisiones: por verificar (D-002); viajan por el respaldo cifrado
+04_DATOS/etiquetas/zonas_confirmadas.geojson
+04_DATOS/etiquetas/revisiones_zonas.json
+04_DATOS/resultados/zonas_confirmadas_plataforma.csv
+clave_respaldo.txt

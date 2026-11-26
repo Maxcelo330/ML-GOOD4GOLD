@@ -48,12 +48,13 @@ from scipy.ndimage import map_coordinates
 from shapely.geometry import LineString, Point, box, mapping, shape
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))   # (con 'python -I' la carpeta del script no se agrega sola)
+import modelo_activo as ma  # noqa: E402
 import nucleo_zonas as nz  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parents[1]
 MODELO_V1 = RAIZ / "04_DATOS" / "resultados" / "modelo_lgbm_v1.txt"
 MODELO_V2 = RAIZ / "04_DATOS" / "resultados" / "modelo_lgbm_v2.txt"
-MODELO = MODELO_V2 if MODELO_V2.exists() else RAIZ / "04_DATOS" / "resultados" / "modelo_lgbm.txt"   # v2 (entrenado con muchos lugares) si existe
+MODELO = ma.ruta()   # modelo activo al arrancar (v2, o el que haya aprendido de las revisiones); cargar_modelo() lo vuelve a leer si cambia
 SALIDA = RAIZ / "04_DATOS" / "analisis_bloques"
 REF = RAIZ / "04_DATOS" / "referencia" / "rios_y_poblados.gpkg"
 
@@ -84,14 +85,17 @@ class ErrorAnalisis(Exception):
 
 
 _modelo = None
+_modelo_ruta = None
 
 
 def cargar_modelo():
-    global _modelo
-    if _modelo is None:
+    """Carga el modelo activo (si aprendio algo nuevo y cambio el activo, lo vuelve a cargar)."""
+    global _modelo, MODELO, _modelo_ruta
+    MODELO = ma.ruta()
+    if _modelo is None or _modelo_ruta != MODELO:
         if not MODELO.exists():
             raise ErrorAnalisis("Falta el modelo guardado (modelo_lgbm.txt). Corre paso5_modelo_base.py.")
-        _modelo = lgb.Booster(model_file=str(MODELO))
+        _modelo, _modelo_ruta = lgb.Booster(model_file=str(MODELO)), MODELO
     return _modelo
 
 
@@ -440,12 +444,15 @@ def analizar(bbox, progreso=lambda etapa, frac, msg: None, usar_cache=True, sens
     t0 = time.time()
     bbox = validar_bbox(bbox)
     SALIDA.mkdir(parents=True, exist_ok=True)
-    clave = hashlib.sha1(json.dumps([[round(v, 4) for v in bbox], sensibilidad, MODELO.name]).encode()).hexdigest()[:12]
+    clave = hashlib.sha1(json.dumps([[round(v, 4) for v in bbox], sensibilidad, ma.ruta().name]).encode()).hexdigest()[:12]
     clave_img = hashlib.sha1(json.dumps([round(v, 4) for v in bbox]).encode()).hexdigest()[:12]   # las imagenes no dependen de la sensibilidad
     ruta_cache = SALIDA / f"{clave}.json"
     if usar_cache and ruta_cache.exists():
         r = json.loads(ruta_cache.read_text(encoding="utf-8"))
         r["resumen"]["desde_cache"] = True
+        if not (SALIDA / f"{clave_img}_compuesto.npz").exists():    # resultado traido del respaldo: faltan las imagenes (no van al repo); se vuelven a bajar
+            g, bandas, ndvi, ndwi, bsi, n_obs, usadas, pend, items, bbox_pad = preparar_bloque(bbox, progreso)
+            guardar_imagenes(clave_img, g, bandas, ndvi, ndwi, bsi, pend, n_obs)
         return r
     modelo = cargar_modelo()
     g, bandas, ndvi, ndwi, bsi, n_obs, usadas, pend, items, bbox_pad = preparar_bloque(bbox, progreso)
@@ -542,7 +549,7 @@ def analizar(bbox, progreso=lambda etapa, frac, msg: None, usar_cache=True, sens
         "resumen": {"clave": clave, "clave_img": clave_img, "origen_m": [g.X0, g.Y1], "epsg_m": g.epsg, "veredicto": veredicto, "n_zonas": len(feats), "area_total_ha": ha, "bloque_km": [round(ancho_km, 1), round(alto_km, 1)],
                     "bloque_km2": round(ancho_km * alto_km, 1), "cobertura_imagen_pct": round(cobertura * 100),
                     "dentro_zona_entrenamiento_pct": round(frac_piloto * 100), "imagenes_usadas": usadas,
-                    "pixeles_puntuados": int(valido.sum()), "filtros": info, "modo": info["modo"], "sensibilidad": sensibilidad, "umbral": umbral, "epsg": g.epsg,
+                    "pixeles_puntuados": int(valido.sum()), "filtros": info, "modo": info["modo"], "sensibilidad": sensibilidad, "umbral": umbral, "epsg": g.epsg, "modelo": ma.version(),
                     "segundos": round(time.time() - t0, 1), "periodo": PERIODO, "avisos": avisos, "desde_cache": False},
     }
     ruta_cache.write_text(json.dumps(resultado, ensure_ascii=False), encoding="utf-8")

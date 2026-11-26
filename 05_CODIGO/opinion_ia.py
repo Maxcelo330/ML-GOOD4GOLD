@@ -20,6 +20,7 @@ import io
 import json
 import os
 import re
+import threading
 from pathlib import Path
 
 import pyproj
@@ -31,15 +32,69 @@ from shapely.ops import transform as sh_transform
 RAIZ = Path(__file__).resolve().parents[1]
 BLOQUES = RAIZ / "04_DATOS" / "analisis_bloques"
 OPINIONES = RAIZ / "04_DATOS" / "opiniones_ia"
-URL_API = "https://api.anthropic.com/v1/messages"
+URL_API = os.environ.get("G4G_URL_API", "https://api.anthropic.com/v1/messages")    # (otra direccion solo para pruebas con una API simulada)
 MODELO_IA = os.environ.get("G4G_MODELO_IA", "claude-sonnet-5-5")
 RES = 20.0
 LADO_PX = 640
 VEREDICTOS = ("probable_mineria", "dudoso", "probable_no_mineria")
 
+# Precio de la API (USD por millon de tokens) de claude-sonnet-5-5: entrada 2, salida 10 (la salida incluye el razonamiento interno).
+# Si se cambia G4G_MODELO_IA, ajustar estos dos valores con los de ese modelo.
+PRECIO_ENTRADA_MTOK = float(os.environ.get("G4G_PRECIO_ENTRADA", "2.0"))
+PRECIO_SALIDA_MTOK = float(os.environ.get("G4G_PRECIO_SALIDA", "10.0"))
+# Tope de gasto acumulado (USD): al llegar a el, el boton se frena hasta que la persona suba el tope. Evita sustos.
+TOPE_USD = float(os.environ.get("G4G_TOPE_USD", "2.0"))
+
 
 class ErrorOpinion(Exception):
     """Error que se le explica a la persona."""
+
+
+CONSUMO = OPINIONES / "consumo.json"
+_candado = threading.Lock()
+
+
+def consumo():
+    """Gasto acumulado (estimado con el uso que informa la API): {'usd', 'opiniones', 'entrada_tok', 'salida_tok', 'tope_usd'}."""
+    try:
+        c = json.loads(CONSUMO.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        c = {}
+    return {"usd": round(float(c.get("usd", 0)), 4), "opiniones": int(c.get("opiniones", 0)), "entrada_tok": int(c.get("entrada_tok", 0)),
+            "salida_tok": int(c.get("salida_tok", 0)), "tope_usd": TOPE_USD}
+
+
+def _sumar_consumo(entrada, salida, usd):
+    with _candado:
+        c = consumo()
+        c.update(usd=round(c["usd"] + usd, 6), opiniones=c["opiniones"] + 1, entrada_tok=c["entrada_tok"] + entrada, salida_tok=c["salida_tok"] + salida)
+        c.pop("tope_usd", None)
+        OPINIONES.mkdir(parents=True, exist_ok=True)
+        CONSUMO.write_text(json.dumps(c, indent=1), encoding="utf-8")
+
+
+def opiniones_de(clave):
+    """Opiniones ya guardadas de un analisis: {id_zona: {veredicto, confianza, que_parece}} (sin llamar a la API ni gastar nada)."""
+    out = {}
+    if re.fullmatch(r"[0-9a-f]{12}", clave or ""):
+        for f in OPINIONES.glob(f"{clave}_*.json"):
+            try:
+                o = json.loads(f.read_text(encoding="utf-8"))
+                out[o["id_zona"]] = {"veredicto": o["veredicto"], "confianza": o.get("confianza"), "que_parece": o.get("que_parece", ""),
+                                     "usd": (o.get("uso") or {}).get("usd")}
+            except (OSError, ValueError, KeyError):
+                continue
+    return out
+
+
+def opinion_guardada(clave, id_zona):
+    """Opinion ya guardada de una zona (sin llamar a la API ni gastar nada), o None."""
+    if not re.fullmatch(r"[0-9a-f]{12}", clave or "") or not re.fullmatch(r"[A-Za-z0-9\-]{3,20}", id_zona or ""):
+        return None
+    try:
+        return {**json.loads((OPINIONES / f"{clave}_{id_zona}.json").read_text(encoding="utf-8")), "desde_cache": True, "consumo": consumo()}
+    except (OSError, ValueError):
+        return None
 
 
 def clave_api():
@@ -129,8 +184,12 @@ def pedir_opinion(clave, id_zona):
     if feat is None:
         raise ErrorOpinion("No se encuentra esa zona.")
     destino = OPINIONES / f"{clave}_{id_zona}.json"
-    if destino.exists():
-        return json.loads(destino.read_text(encoding="utf-8"))
+    if destino.exists():     # ya consultada: no se vuelve a cobrar
+        return {**json.loads(destino.read_text(encoding="utf-8")), "desde_cache": True, "consumo": consumo()}
+    c0 = consumo()
+    if c0["usd"] >= TOPE_USD:
+        raise ErrorOpinion(f"Se llego al tope de gasto (US$ {TOPE_USD:.2f}; llevas US$ {c0['usd']:.2f}). Para seguir, sube el tope con la "
+                           "variable G4G_TOPE_USD y reinicia el visor.")
     p = feat["properties"]
     vistas = _vistas(res["resumen"], shape(feat["geometry"]))
     m = lambda v: "sin dato" if v is None else f"{v} m"  # noqa: E731
@@ -140,7 +199,8 @@ def pedir_opinion(clave, id_zona):
     contenido.append({"type": "text", "text": texto})
     try:
         r = requests.post(URL_API, timeout=90, headers={"x-api-key": clave_api(), "anthropic-version": "2023-06-01", "content-type": "application/json"},
-                          json={"model": MODELO_IA, "max_tokens": 700, "messages": [{"role": "user", "content": contenido}]})
+                          json={"model": MODELO_IA, "max_tokens": 3000, "output_config": {"effort": "medium"},
+                                "messages": [{"role": "user", "content": contenido}]})
     except requests.RequestException:
         raise ErrorOpinion("No se pudo conectar con la API de Claude (sin internet?).")
     if r.status_code == 401:
@@ -149,8 +209,15 @@ def pedir_opinion(clave, id_zona):
         raise ErrorOpinion("La API de Claude pide esperar un momento (limite de uso). Intenta de nuevo en un minuto.")
     if r.status_code >= 400:
         raise ErrorOpinion(f"La API de Claude respondio con error {r.status_code}.")
+    cuerpo = r.json()
+    uso = cuerpo.get("usage") or {}
+    ent, sal = int(uso.get("input_tokens", 0)), int(uso.get("output_tokens", 0))     # la salida incluye el razonamiento interno
+    usd = ent * PRECIO_ENTRADA_MTOK / 1e6 + sal * PRECIO_SALIDA_MTOK / 1e6
+    _sumar_consumo(ent, sal, usd)     # se cobra aunque la respuesta no sirva, asi que se cuenta siempre
+    if cuerpo.get("stop_reason") == "refusal":
+        raise ErrorOpinion("Claude no quiso responder sobre esta imagen. Revisa la zona tu mismo.")
     try:
-        txt = "".join(b.get("text", "") for b in r.json()["content"] if b.get("type") == "text")
+        txt = "".join(b.get("text", "") for b in cuerpo["content"] if b.get("type") == "text")
         j = json.loads(txt[txt.index("{"):txt.rindex("}") + 1])
         if j.get("veredicto") not in VEREDICTOS:
             raise ValueError("veredicto")
@@ -160,6 +227,9 @@ def pedir_opinion(clave, id_zona):
               "que_parece": str(j.get("que_parece", ""))[:200], "motivos": [str(x)[:240] for x in (j.get("motivos") or [])][:4],
               "que_revisar": str(j.get("que_revisar", ""))[:240],
               "aviso": "Opinion de una IA sobre una imagen de 20 m. No es verificacion de campo ni indica legalidad."}
+    salida["modelo"] = res["resumen"].get("modelo") or "v2"       # version del modelo que puntuo la zona (para comparar versiones)
+    salida["puntaje_modelo"] = p["puntaje_modelo"]
+    salida["uso"] = {"entrada_tok": ent, "salida_tok": sal, "usd": round(usd, 5)}
     OPINIONES.mkdir(parents=True, exist_ok=True)
     destino.write_text(json.dumps(salida, ensure_ascii=False, indent=1), encoding="utf-8")
-    return salida
+    return {**salida, "desde_cache": False, "consumo": consumo()}
