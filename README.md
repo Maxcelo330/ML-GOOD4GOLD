@@ -13,6 +13,7 @@ Proyecto de la decisión D-003 del hackathon Gold4Good (desafío ORO-4.2). Esta 
 | `04_DATOS/resultados` | Mapa de puntaje (`puntaje_mineria.tif`) y CSV/GeoJSON para la plataforma |
 | `05_CODIGO/` | Scripts y cuadernos del pipeline |
 | `06_QGIS-PROYECTO/` | Proyecto `.qgz` |
+| `04_DATOS/banco_bloques` | Imágenes de 31 lugares con etiquetas MapBiomas para reentrenar (pesado, no va a git; `banco_bloques.py`) |
 | `07_VISOR/` | Visor interactivo: dibuja un bloque en el mapa y el modelo marca zonas (arranca con `EJECUTAR-VISOR.bat`; ver `LEEME.md`) |
 
 ## Entorno

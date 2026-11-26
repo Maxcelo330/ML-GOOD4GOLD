@@ -6,10 +6,12 @@
 
 ## Cómo se usa
 1. **Ir a un lugar:** escribe un lugar (por ejemplo "La Pampa, Madre de Dios") y el mapa vuela ahí.
-2. **Dibujar un bloque:** botón "Dibujar un bloque", y arrastra sobre el mapa. Tamaño: de 1 × 1 a 12 × 12 km (se pone rojo si no cumple).
-3. **Analizar:** el programa busca imágenes Sentinel-2 de mayo a septiembre 2026, baja la parte del bloque, calcula índices y pendiente, corre el modelo y aplica los filtros. Tarda cerca de 1 a 2 minutos la primera vez (queda guardado).
+2. **Dibujar un bloque:** botón "Dibujar un bloque", y arrastra sobre el mapa. Tamaño: de 1 × 1 a 30 × 30 km (se pone rojo si no cumple).
+3. **Analizar:** el programa busca imágenes Sentinel-2 de mayo a septiembre 2026, baja la parte del bloque, calcula índices y pendiente, corre el modelo y aplica los filtros. Tarda de 1 a 3 minutos la primera vez según el tamaño (queda guardado).
 4. **Resultado:** las zonas aparecen en violeta con su ficha. Toca una para ver área, puntaje, distancia a río y poblado, y marcar "Mi revisión".
-5. **Descargar:** CSV con tu revisión o con la lista completa.
+5. **Segunda opinión de Claude (opcional):** en la ficha de una zona de bloque, botón "Pedir segunda opinión a Claude". Claude mira tres recortes de imagen y dice si parece minería, por qué y qué comprobar. Necesita una **clave de la API de Claude**: guárdala en un archivo `clave_api.txt` en la carpeta del proyecto (una sola línea; no se sube a git) y reinicia el visor. Cada opinión cuesta centavos. Sin clave, el visor lo avisa y todo lo demás funciona.
+6. **Tu revisión entrena el modelo:** cuando marcas una zona de bloque como "Parece / No parece actividad minera", queda guardada en `04_DATOS/etiquetas/revisiones_visor.jsonl` (solo en tu equipo). Es la etiqueta de más valor para reentrenar (`05_CODIGO\paso10_reentrenar.py`).
+7. **Descargar:** CSV con tu revisión o con la lista completa.
 
 ## Trabajar desde otro equipo
 1. `git pull` del repo y crear el entorno: `conda env create -f 02_ENTORNO/environment.yml` (queda `g4g-ml`).
@@ -22,7 +24,7 @@
 - Prueba en La Pampa (Madre de Dios): detecta zonas dentro de la minería pero cubre solo 17 % (normal) a 36 % (alta) del terreno removido. Ver la nota de método, sección 5b.
 
 ## Qué hace el análisis y qué no
-- Corre el **mismo modelo y las mismas reglas** que la lista del piloto (`nucleo_zonas.py`). Prueba en Tipuani: 75,6 ha y puntaje 72 en el bloque, contra 78,6 ha y puntaje 73 en la lista del piloto.
+- Usa el **modelo v2** (entrenado con 31 lugares, ver la nota de método 5c) y las reglas de `nucleo_zonas.py` (estrictas dentro del piloto, relajadas fuera). Prueba en Tipuani: 75,6 ha y puntaje 72 en el bloque, contra 78,6 ha y puntaje 73 en la lista del piloto.
 - **Solo está validado (con límites) en el norte de La Paz.** Fuera de ahí puede confundir suelo agrícola, roca o playas de río con minería. El visor avisa cuando el bloque está fuera de esa zona.
 - Resultado = "zonas con parecido a posible actividad minera (por verificar; registro AJAM aún no consultado)". No dice si es legal ni si hay mercurio. El puntaje no es una probabilidad.
 - Usa la imagen de mayo-septiembre 2026: no ve cambios en el tiempo.

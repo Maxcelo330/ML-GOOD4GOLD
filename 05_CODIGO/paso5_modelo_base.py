@@ -195,6 +195,10 @@ D.loc[es_fondo, "pueblo"] = pueblo_cercano(D.x[es_fondo].to_numpy(), D.y[es_fond
 D["bloque"] = D["bloque"].astype(int)
 log(f"Muestra: {len(D)} pixeles | mineria {int((D.clase == 1).sum())} | no mineria {int((D.clase == 0).sum())} "
     f"(de ellos {int((D.origen == 'fondo').sum())} de fondo) | {D.bloque.nunique()} bloques de {BLOQUE_M // 1000} km")
+# Se guarda la muestra de entrenamiento del piloto: paso10_reentrenar.py la combina con la de otros lugares (no va a git)
+(RAIZ / "04_DATOS" / "entrenamiento").mkdir(parents=True, exist_ok=True)
+if not args.provisional:
+    D.to_csv(RAIZ / "04_DATOS" / "entrenamiento" / "muestra_piloto.csv.gz", index=False)
 
 
 # ----------------------------------------------------------------- 3. modelo y prueba por zonas

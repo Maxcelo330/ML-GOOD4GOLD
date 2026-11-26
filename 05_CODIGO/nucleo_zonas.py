@@ -21,6 +21,9 @@ from scipy import ndimage as ndi
 from shapely.geometry import shape
 
 VARIABLES = ["B02", "B03", "B04", "B08", "B11", "B12", "ndvi", "ndwi", "bsi", "pendiente"]
+# Variables de CONTEXTO (modelo v2): miran el entorno del pixel (un pixel de suelo desnudo junto a agua y con textura lisa suele
+# ser un banco de arena; en una ciudad el NDVI cambia mucho de un pixel a otro; en una mina hay mucho suelo removido alrededor).
+VARIABLES_CONTEXTO = ["ndvi_textura_100m", "ndvi_media_300m", "frac_agua_300m", "frac_pelado_300m"]
 NODATA = -9999.0
 MIN_OBS = 3                  # un pixel con menos de 3 fotos validas no se puntua (quedan nubes sueltas)
 B02_MAX = 0.25               # azul muy alto = nube que se colo
@@ -31,6 +34,8 @@ MIN_OBS_MEDIANA = 7
 NDVI_MEDIANA_MAX = 0.45
 BORDE_ENTRENAMIENTO_PX = 5   # 100 m
 ENTORNO_NDVI_MIN = 0.5
+# Parametros del analisis de bloques FUERA del piloto (reglas relajadas): se marcan, no se eliminan, y se tolera mas ruido
+RELAJADO = dict(estricto=False, unir_px=3, margen_px=5, rellenar_huecos=True)
 ANILLO_PX = 15               # el "entorno" son unos 300 m alrededor de la zona
 
 
@@ -48,8 +53,26 @@ def mediana_pila(pila):
     return med.astype("float32"), n
 
 
-def variables_y_validez(bandas, ndvi, ndwi, bsi, pendiente, nobs):
-    """Arma la pila de 10 variables (orden de VARIABLES) y la mascara de pixeles que se pueden puntuar.
+def _media_local(x, ok, k):
+    """Media de x en una ventana de k x k pixeles usando solo los pixeles validos (ok)."""
+    num = ndi.uniform_filter(np.where(ok, x, 0.0).astype("float32"), k, mode="nearest")
+    den = ndi.uniform_filter(ok.astype("float32"), k, mode="nearest")
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return np.where(den > 0.05, num / den, np.nan).astype("float32")
+
+
+def contexto(ndvi, ndwi):
+    """4 capas de contexto (orden de VARIABLES_CONTEXTO). Entradas con NODATA donde no hay dato."""
+    ok = np.isfinite(ndvi) & (ndvi != NODATA)
+    m5, m5c = _media_local(ndvi, ok, 5), _media_local(ndvi ** 2, ok, 5)
+    textura = np.sqrt(np.clip(m5c - m5 ** 2, 0, None))
+    ok_w = ok & np.isfinite(ndwi) & (ndwi != NODATA)
+    return np.stack([textura, _media_local(ndvi, ok, 15), _media_local((ndwi > 0).astype("float32"), ok_w, 15),
+                     _media_local((ndvi < 0.3).astype("float32"), ok, 15)]).astype("float32")
+
+
+def variables_y_validez(bandas, ndvi, ndwi, bsi, pendiente, nobs, con_contexto=False):
+    """Arma la pila de variables (orden de VARIABLES, y VARIABLES_CONTEXTO si con_contexto) y la mascara de pixeles que se pueden puntuar.
 
     bandas: (6, alto, ancho) en el orden B02, B03, B04, B08, B11, B12.
     """
@@ -58,6 +81,9 @@ def variables_y_validez(bandas, ndvi, ndwi, bsi, pendiente, nobs):
     with np.errstate(invalid="ignore"):
         valido &= datos[0] < B02_MAX
     datos[:, ~valido] = np.nan
+    if con_contexto:
+        datos = np.concatenate([datos, contexto(ndvi, ndwi)])
+        datos[len(VARIABLES):, ~valido] = np.nan
     return datos, valido
 
 
@@ -65,17 +91,20 @@ def puntuar(modelo, datos, valido):
     """Puntaje (0 a 1) de cada pixel valido con un lightgbm.Booster; -9999 donde no se puede puntuar."""
     prob = np.full(valido.shape, NODATA, dtype="float32")
     if valido.any():
-        prob[valido] = modelo.predict(datos[:, valido].T)
+        prob[valido] = modelo.predict(datos[:modelo.num_feature()][:, valido].T)   # el modelo v1 usa 10 variables; el v2, 14 (con contexto)
     return prob
 
 
-def extraer_zonas(prob, ndvi, ndwi, nobs, T, crs, excluir=None, aceptadas=None, estricto=True, unir_px=0, umbral=UMBRAL):
+def extraer_zonas(prob, ndvi, ndwi, nobs, T, crs, excluir=None, aceptadas=None, estricto=True, unir_px=0, umbral=UMBRAL,
+                  margen_px=MARGEN_SIN_DATOS_PX, rellenar_huecos=False):
     """Convierte el mapa de puntaje en zonas. Devuelve (GeoDataFrame, info).
 
     excluir:   mascara booleana de lo que el modelo ya vio al entrenar (se ignora).
     aceptadas: mascara booleana de las zonas mineras de entrenamiento (se ignora su borde de 100 m).
     estricto: True = las reglas de fotos y de entorno eliminan zonas (piloto). False = solo las marcan (otros lugares).
     umbral: puntaje minimo del pixel (0.5 normal; mas bajo = mas sensible y mas falsos positivos).
+    margen_px: margen alrededor de huecos sin datos (600 m en el piloto; en bloques fuera del piloto se usa mucho menos, ver RELAJADO).
+    rellenar_huecos: rellena los huecos de cada zona (pozas dentro de una zona minera no la parten ni la reducen).
     unir_px: une pedazos separados por menos de ~2*unir_px pixeles (20 m cada uno). El piloto no une (0).
     El GeoDataFrame trae: puntaje (media), area_ha, obs_mediana, ndvi_mediano y la geometria en 'crs'.
     """
@@ -85,7 +114,7 @@ def extraer_zonas(prob, ndvi, ndwi, nobs, T, crs, excluir=None, aceptadas=None, 
     agua = valido & (ndwi > 0)
     excluir = np.zeros(forma, bool) if excluir is None else excluir
     aceptadas = np.zeros(forma, bool) if aceptadas is None else aceptadas
-    cerca_sin_datos = ndi.binary_dilation(~valido, structure=np.ones((3, 3)), iterations=MARGEN_SIN_DATOS_PX)
+    cerca_sin_datos = ndi.binary_dilation(~valido, structure=np.ones((3, 3)), iterations=margen_px)
     borde_aceptadas = ndi.binary_dilation(aceptadas, structure=np.ones((3, 3)), iterations=BORDE_ENTRENAMIENTO_PX)
     base = valido & (prob >= umbral)
     mascara = base & ~agua & ~excluir & ~cerca_sin_datos & ~borde_aceptadas
@@ -93,6 +122,8 @@ def extraer_zonas(prob, ndvi, ndwi, nobs, T, crs, excluir=None, aceptadas=None, 
     mascara = ndi.binary_opening(mascara, structure=np.ones((3, 3)))
     if unir_px:   # areas mineras grandes salen en pedacitos (efecto panal): se unen los que estan muy cerca
         mascara = ndi.binary_closing(mascara, structure=np.ones((3, 3)), iterations=unir_px) & ~agua
+    if rellenar_huecos:   # las pozas de agua dentro de una zona minera forman parte de ella
+        mascara = ndi.binary_fill_holes(mascara)
     info = {"pixeles_sobre_umbral": int(base.sum()), "de_ellos_agua": int((base & agua).sum()),
             "de_ellos_entrenamiento": int((base & excluir).sum())}
     vacio = gpd.GeoDataFrame({"puntaje": [], "area_ha": [], "obs_mediana": [], "ndvi_mediano": []},

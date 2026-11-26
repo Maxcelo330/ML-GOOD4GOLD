@@ -16,7 +16,7 @@ LIMITES (se muestran tambien en el visor):
     propuestas por Claude. Fuera de esa zona no esta validado: puede confundir suelo agricola, roca, playas
     de rio u otro terreno. El resultado es "zonas con parecido a actividad minera", no "hay mineria".
   - Se usa la imagen de mayo-septiembre 2026. No ve el cambio en el tiempo ni imagenes mas nuevas.
-  - Un bloque mide como maximo 12 x 12 km (para responder en pocos segundos). Zonas menores a 5 ha no se ven.
+  - Un bloque mide como maximo 30 x 30 km (los grandes tardan varios minutos). Zonas menores a 5 ha no se ven.
   - El puntaje es relativo, no una probabilidad. No indica legalidad ni mercurio.
 
 Como probarlo desde la consola (entorno g4g-ml):
@@ -27,6 +27,7 @@ import json
 import math
 import os
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -50,7 +51,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))   # (con 'python -I' la
 import nucleo_zonas as nz  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parents[1]
-MODELO = RAIZ / "04_DATOS" / "resultados" / "modelo_lgbm.txt"
+MODELO_V1 = RAIZ / "04_DATOS" / "resultados" / "modelo_lgbm_v1.txt"
+MODELO_V2 = RAIZ / "04_DATOS" / "resultados" / "modelo_lgbm_v2.txt"
+MODELO = MODELO_V2 if MODELO_V2.exists() else RAIZ / "04_DATOS" / "resultados" / "modelo_lgbm.txt"   # v2 (entrenado con muchos lugares) si existe
 SALIDA = RAIZ / "04_DATOS" / "analisis_bloques"
 REF = RAIZ / "04_DATOS" / "referencia" / "rios_y_poblados.gpkg"
 
@@ -59,9 +62,11 @@ PERIODO = "2026-05-01/2026-09-30"
 MAX_NUBES = 30                 # % maximo de nubes de la escena completa
 RES = 20.0
 MARGEN_M = 1000                # se analiza 1 km mas alla del bloque para que los filtros de borde no corten zonas
-MAX_LADO_KM = 12
+MAX_LADO_KM = 30
 MIN_LADO_KM = 1
-MAX_ZONAS = 40
+MAX_ZONAS = 80
+PROF = 16                      # observaciones maximas guardadas por pixel (en bloques grandes hay varias escenas encima)
+PARALELO_ESCENAS = 3           # escenas que se bajan a la vez
 BANDAS = ["B02", "B03", "B04", "B08", "B11", "B12"]
 SCL_INVALIDOS = [0, 1, 3, 8, 9, 10, 11]
 OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]
@@ -210,40 +215,60 @@ def _leer_con_reintentos(g, href, rect, remuestreo):
 
 
 def descargar_compuesto(g, escenas, progreso):
-    """Mediana de las escenas sin nube. Devuelve bandas (6,alto,ancho), ndvi, ndwi, bsi, n_obs y datos de las escenas."""
-    pila = np.full((len(BANDAS), len(escenas), g.alto, g.ancho), np.nan, dtype="float32")
-    usadas = []
-    for k, it in enumerate(escenas):
+    """Mediana de las escenas sin nube. Devuelve bandas (6,alto,ancho), ndvi, ndwi, bsi, n_obs y datos de las escenas.
+
+    Cada pixel guarda hasta PROF observaciones validas (en una sola pila de numeros enteros, para gastar poca memoria);
+    asi un bloque grande que cruza varias escenas vecinas no necesita una pila por escena.
+    """
+    pila = np.full((len(BANDAS), PROF, g.alto, g.ancho), 65535, dtype="uint16")   # reflectancia x 10000; 65535 = vacio
+    cnt = np.zeros((g.alto, g.ancho), dtype="uint8")
+    candado, usadas, hechas = threading.Lock(), [], [0]
+
+    def una_escena(it):
         it = planetary_computer.sign(it)
         with rasterio.open(it.assets["B04"].href) as src:
             rect = g.ventana(src)
-        base = it.properties.get("s2:processing_baseline", "04.00")
-        offset = 1000 if float(base) >= 4.0 else 0     # baseline >= 04.00: los valores traen -1000 de desplazamiento
         if rect is not None:
+            base = it.properties.get("s2:processing_baseline", "04.00")
+            offset = 1000 if float(base) >= 4.0 else 0     # baseline >= 04.00: los valores traen -1000 de desplazamiento
             c0, f0, w, h = rect
             nombres = BANDAS + ["SCL"]
             with ThreadPoolExecutor(max_workers=4) as pool:
                 lect = list(pool.map(lambda n: _leer_con_reintentos(
                     g, it.assets[n].href, rect, Resampling.nearest if n == "SCL" else Resampling.average), nombres))
-            scl = lect[-1]
-            valido = ~np.isin(scl, SCL_INVALIDOS)
-            for b, dn in enumerate(lect[:-1]):
-                dn = dn.astype("float32")
-                refl = np.clip((dn - offset) / 10000.0, 0.0, 1.5)
-                refl[(dn == 0) | ~valido] = np.nan
-                pila[b, k, f0:f0 + h, c0:c0 + w] = refl
-            usadas.append({"id": it.id, "fecha": str(it.datetime.date()), "nubes_pct": round(it.properties["eo:cloud_cover"], 1),
-                           "tile": it.properties["s2:mgrs_tile"]})
-        progreso(1, (k + 1) / len(escenas), f"Escena {k + 1} de {len(escenas)} ({it.datetime.date()})")
+            ok = ~np.isin(lect[-1], SCL_INVALIDOS)
+            for dn in lect[:-1]:
+                ok &= dn != 0
+            with candado:
+                sub = cnt[f0:f0 + h, c0:c0 + w]
+                rr, cc = np.nonzero(ok & (sub < PROF))
+                slot = sub[rr, cc]
+                for b, dn in enumerate(lect[:-1]):
+                    v = np.clip(dn.astype("float32") - offset, 0, 15000).astype("uint16")
+                    pila[b, slot, f0 + rr, c0 + cc] = v[rr, cc]
+                sub[rr, cc] += 1
+                usadas.append({"id": it.id, "fecha": str(it.datetime.date()), "nubes_pct": round(it.properties["eo:cloud_cover"], 1),
+                               "tile": it.properties["s2:mgrs_tile"]})
+        with candado:
+            hechas[0] += 1
+            progreso(1, hechas[0] / len(escenas), f"Escena {hechas[0]} de {len(escenas)} ({it.datetime.date()})")
+
+    with ThreadPoolExecutor(max_workers=PARALELO_ESCENAS) as pool:
+        for fut in [pool.submit(una_escena, it) for it in escenas]:
+            fut.result()
     if not usadas:
         raise ErrorAnalisis("Las imagenes encontradas no cubren el bloque.")
-    # Mediana por pixel de cada banda; observaciones validas = el minimo entre bandas (como el paso 4)
-    med, n_obs = [], None
+    usadas.sort(key=lambda u: u["fecha"])
+    # Mediana por pixel de cada banda (como el paso 4); observaciones validas = fotos guardadas en ese pixel
+    med = []
     for b in range(len(BANDAS)):
-        m, n = nz.mediana_pila(pila[b])
+        a = pila[b].astype("float32") / 10000.0
+        a[pila[b] == 65535] = np.nan
+        m, _ = nz.mediana_pila(a)
         med.append(m)
-        n_obs = n if n_obs is None else np.minimum(n_obs, n)
+        del a
     del pila
+    n_obs = cnt.astype("int16")
     sin = np.zeros((g.alto, g.ancho), dtype=bool)
     for m in med:
         sin |= np.isnan(m)
@@ -361,6 +386,48 @@ def distancias(gdf, g, bbox):
     return d_rio, d_pob, n_pob
 
 
+def preparar_bloque(bbox, progreso=lambda etapa, frac, msg: None):
+    """Etapas 1 a 3: busca las escenas, baja el compuesto del bloque y calcula la pendiente (sin correr el modelo)."""
+    pad = MARGEN_M / 111_000
+    bbox_pad = (bbox[0] - pad, bbox[1] - pad, bbox[2] + pad, bbox[3] + pad)
+    progreso(0, 0.1, "Consultando el catalogo de imagenes")
+    epsg, items = buscar_escenas(bbox_pad, progreso)
+    g = Grilla(epsg, bbox_pad)
+    # La regla de zonas pide mediana de 7+ fotos validas por pixel (nucleo_zonas.MIN_OBS_MEDIANA): hacen falta bastantes escenas
+    # (12 por tile, como en el piloto). El costo lo fija el area del bloque, no el numero de tiles.
+    escenas = elegir(items, box(*bbox_pad), 12)
+    if not escenas:
+        raise ErrorAnalisis("No se encontraron imagenes que cubran el bloque.")
+    progreso(0, 1.0, f"{len(escenas)} imagenes elegidas de {len(items)} disponibles")
+    bandas, ndvi, ndwi, bsi, n_obs, usadas = descargar_compuesto(g, escenas, progreso)
+    progreso(2, 0.2, "Calculando la pendiente del terreno")
+    pend = pendiente(g, bbox_pad)
+    progreso(2, 1.0, "Indices y pendiente listos")
+    return g, bandas, ndvi, ndwi, bsi, n_obs, usadas, pend, items, bbox_pad
+
+
+# ------------------------------------------------------------------ imagenes del bloque (para la segunda opinion y el reentrenamiento)
+def _estirar(a, lo=None, hi=None):
+    """Estira una banda a 0-255 (2% a 98% de los pixeles validos) para que se vea bien en pantalla."""
+    ok = np.isfinite(a) & (a != nz.NODATA)
+    if lo is None:
+        lo, hi = np.percentile(a[ok], [2, 98]) if ok.any() else (0.0, 1.0)
+    return np.clip((np.where(ok, a, lo) - lo) / max(hi - lo, 1e-6), 0, 1)
+
+
+def guardar_imagenes(clave, g, bandas, ndvi, ndwi, bsi, pend, n_obs):
+    """Guarda el color natural, un falso color (infrarrojo y SWIR) y el compuesto completo (para reentrenar)."""
+    from PIL import Image
+    B2, B3, B4, B8, B11 = bandas[0], bandas[1], bandas[2], bandas[3], bandas[4]
+    natural = np.stack([_estirar(B4, 0.02, 0.28), _estirar(B3, 0.02, 0.28), _estirar(B2, 0.02, 0.28)], -1) ** 0.75   # gamma: mas claro en pantalla
+    falso = np.stack([_estirar(B11, 0.03, 0.40), _estirar(B8, 0.05, 0.50), _estirar(B4, 0.02, 0.28)], -1)
+    for nombre, a in (("natural", natural), ("falso", falso)):
+        Image.fromarray((a * 255).astype("uint8")).save(SALIDA / f"{clave}_{nombre}.png", optimize=True)
+    np.savez_compressed(SALIDA / f"{clave}_compuesto.npz", bandas=bandas.astype("float16"), ndvi=ndvi.astype("float16"), ndwi=ndwi.astype("float16"),
+                        bsi=bsi.astype("float16"), pend=pend.astype("float16"), n_obs=n_obs.astype("uint8"),
+                        T=np.array(g.T)[:6], epsg=np.array([g.epsg]))
+
+
 # ------------------------------------------------------------------ flujo completo
 def analizar(bbox, progreso=lambda etapa, frac, msg: None, usar_cache=True, sensibilidad="normal"):
     """Analiza un bloque (lon_oeste, lat_sur, lon_este, lat_norte). Devuelve un dict listo para el visor.
@@ -373,37 +440,21 @@ def analizar(bbox, progreso=lambda etapa, frac, msg: None, usar_cache=True, sens
     t0 = time.time()
     bbox = validar_bbox(bbox)
     SALIDA.mkdir(parents=True, exist_ok=True)
-    clave = hashlib.sha1(json.dumps([[round(v, 4) for v in bbox], sensibilidad]).encode()).hexdigest()[:12]
+    clave = hashlib.sha1(json.dumps([[round(v, 4) for v in bbox], sensibilidad, MODELO.name]).encode()).hexdigest()[:12]
+    clave_img = hashlib.sha1(json.dumps([round(v, 4) for v in bbox]).encode()).hexdigest()[:12]   # las imagenes no dependen de la sensibilidad
     ruta_cache = SALIDA / f"{clave}.json"
     if usar_cache and ruta_cache.exists():
         r = json.loads(ruta_cache.read_text(encoding="utf-8"))
         r["resumen"]["desde_cache"] = True
         return r
     modelo = cargar_modelo()
-    pad = MARGEN_M / 111_000
-    bbox_pad = (bbox[0] - pad, bbox[1] - pad, bbox[2] + pad, bbox[3] + pad)
-
-    progreso(0, 0.1, "Consultando el catalogo de imagenes")
-    epsg, items = buscar_escenas(bbox_pad, progreso)
-    g = Grilla(epsg, bbox_pad)
-    n_tiles = len({i.properties["s2:mgrs_tile"] for i in items})
-    # La regla de zonas pide mediana de 7+ fotos validas por pixel (nucleo_zonas.MIN_OBS_MEDIANA): hacen falta bastantes escenas
-    # (como en el piloto, que usa 12 por tile). Con menos, todas las zonas se descartarian por 'pocas fotos'.
-    escenas = elegir(items, box(*bbox_pad), 12 if n_tiles <= 1 else 8 if n_tiles == 2 else 5)
-    if not escenas:
-        raise ErrorAnalisis("No se encontraron imagenes que cubran el bloque.")
-    progreso(0, 1.0, f"{len(escenas)} imagenes elegidas de {len(items)} disponibles")
-
-    bandas, ndvi, ndwi, bsi, n_obs, usadas = descargar_compuesto(g, escenas, progreso)
-
-    progreso(2, 0.2, "Calculando la pendiente del terreno")
-    pend = pendiente(g, bbox_pad)
-    progreso(2, 1.0, "Indices y pendiente listos")
+    g, bandas, ndvi, ndwi, bsi, n_obs, usadas, pend, items, bbox_pad = preparar_bloque(bbox, progreso)
 
     progreso(3, 0.2, "Puntuando cada pixel con el modelo")
-    datos, valido = nz.variables_y_validez(bandas, ndvi, ndwi, bsi, pend, n_obs)
+    datos, valido = nz.variables_y_validez(bandas, ndvi, ndwi, bsi, pend, n_obs, con_contexto=modelo.num_feature() > len(nz.VARIABLES))
     prob = nz.puntuar(modelo, datos, valido)
     progreso(3, 1.0, f"{int(valido.sum()):,} pixeles puntuados")
+    guardar_imagenes(clave_img, g, bandas, ndvi, ndwi, bsi, pend, n_obs)
 
     progreso(4, 0.2, "Aplicando los filtros contra falsos positivos")
     cand = gpd.read_file(RAIZ / "04_DATOS" / "etiquetas" / "candidatos.gpkg", layer="candidatos")
@@ -422,7 +473,7 @@ def analizar(bbox, progreso=lambda etapa, frac, msg: None, usar_cache=True, sens
     frac_piloto = float(b_wgs.intersection(aoi).area / b_wgs.area)
     estricto = frac_piloto >= 0.5
     gdf, info = nz.extraer_zonas(prob, ndvi, ndwi, n_obs.astype("float32"), g.T, g.crs, excluir=excluir, aceptadas=aceptadas,
-                                 estricto=estricto, unir_px=0 if estricto else 3, umbral=umbral)
+                                 umbral=umbral, **({} if estricto else nz.RELAJADO))
     info["modo"] = "estricto (zona piloto)" if estricto else "relajado (fuera del piloto: reglas marcadas, no eliminadas)"
     if os.environ.get("G4G_DEBUG"):   # solo para revisar un bloque a mano (guarda las capas calculadas)
         np.savez_compressed(SALIDA / f"{clave}_debug.npz", bandas=bandas, ndvi=ndvi, ndwi=ndwi, n_obs=n_obs, prob=prob, pend=pend, T=np.array(g.T)[:6])
@@ -451,7 +502,7 @@ def analizar(bbox, progreso=lambda etapa, frac, msg: None, usar_cache=True, sens
     for i, (fila, w) in enumerate(zip(gdf.itertuples(), wgs.geometry)):
         rp = w.representative_point()
         feats.append({"type": "Feature", "geometry": mapping(w),
-                      "properties": {"id": f"B{clave[:4]}-{i + 1:03d}", "area_ha": float(fila.area_ha), "puntaje_modelo": int(round(fila.puntaje * 100)),
+                      "properties": {"id": f"B{clave[:4]}-{i + 1:03d}", "clave": clave, "area_ha": float(fila.area_ha), "puntaje_modelo": int(round(fila.puntaje * 100)),
                                      "dist_rio_m": dist[0][i] if dist else None, "dist_poblado_m": dist[1][i] if dist else None,
                                      "poblado_cercano": dist[2][i] if dist else "", "lat": round(rp.y, 6), "lng": round(rp.x, 6),
                                      "ndvi_mediano": float(fila.ndvi_mediano), "obs_mediana": float(fila.obs_mediana),
@@ -488,10 +539,10 @@ def analizar(bbox, progreso=lambda etapa, frac, msg: None, usar_cache=True, sens
     resultado = {
         "bbox": list(bbox),
         "zonas": {"type": "FeatureCollection", "features": feats},
-        "resumen": {"veredicto": veredicto, "n_zonas": len(feats), "area_total_ha": ha, "bloque_km": [round(ancho_km, 1), round(alto_km, 1)],
+        "resumen": {"clave": clave, "clave_img": clave_img, "origen_m": [g.X0, g.Y1], "epsg_m": g.epsg, "veredicto": veredicto, "n_zonas": len(feats), "area_total_ha": ha, "bloque_km": [round(ancho_km, 1), round(alto_km, 1)],
                     "bloque_km2": round(ancho_km * alto_km, 1), "cobertura_imagen_pct": round(cobertura * 100),
                     "dentro_zona_entrenamiento_pct": round(frac_piloto * 100), "imagenes_usadas": usadas,
-                    "pixeles_puntuados": int(valido.sum()), "filtros": info, "modo": info["modo"], "sensibilidad": sensibilidad, "umbral": umbral, "epsg": epsg,
+                    "pixeles_puntuados": int(valido.sum()), "filtros": info, "modo": info["modo"], "sensibilidad": sensibilidad, "umbral": umbral, "epsg": g.epsg,
                     "segundos": round(time.time() - t0, 1), "periodo": PERIODO, "avisos": avisos, "desde_cache": False},
     }
     ruta_cache.write_text(json.dumps(resultado, ensure_ascii=False), encoding="utf-8")

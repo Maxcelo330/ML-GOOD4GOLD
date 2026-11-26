@@ -67,6 +67,12 @@
   .grande div { flex:1; background:var(--acento-suave); border-radius:10px; padding:8px 10px; text-align:center; }
   .grande b { display:block; font-size:26px; color:var(--acento); line-height:1.1; } .grande span { font-size:11px; color:var(--suave); }
   .datos { display:grid; grid-template-columns:1fr 1fr; gap:3px 10px; font-size:12px; color:var(--suave); margin:8px 0; }
+  .ia-btn { width:100%; margin:8px 0 4px; padding:8px 10px; border:1px solid #7048e8; background:#f3f0ff; color:#3b2a8f; border-radius:8px; font-weight:600; cursor:pointer; }
+  .ia-btn[disabled] { opacity:.6; cursor:wait; }
+  .ia-caja { border:1px solid #d0bfff; background:#faf8ff; border-radius:8px; padding:8px 10px; font-size:12.5px; margin:6px 0; }
+  .ia-caja .ver { display:inline-block; font-weight:700; padding:1px 8px; border-radius:10px; color:#fff; margin-right:6px; }
+  .ia-caja ul { margin:4px 0 4px 16px; padding:0; }
+  .ia-caja .fin { color:var(--suave); font-size:11.5px; margin-top:4px; }
   .alerta { background:#fff4e0; border:1px solid #f0c987; color:#6b4200; border-radius:8px; padding:6px 8px; font-size:12px; margin:6px 0; }
   .error { background:#ffe3e3; border:1px solid #ffa8a8; color:#8a1c1c; border-radius:8px; padding:8px; font-size:13px; }
   /* animaciones sobre el mapa */
@@ -219,14 +225,45 @@ function elegir(id, volar) {
   if (p.confianza) filas.push(["Confianza", p.confianza === "completa" ? "completa (cumple las reglas del piloto)" : "parcial"]);
   const titulo = t === "lv" ? "lectura visual" : t === "an" ? "hallada en el análisis de bloque" : "sugerida por el modelo";
   fi.innerHTML = `<h2>${esc(id)} · ${titulo}</h2><dl>${filas.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join("")}</dl>${aviso}${avz}` +
-    `<div class="nota">${esc(p.nota)}</div><b>Mi revisión</b> (mirando la imagen)` +
+    `<div class="nota">${esc(p.nota)}</div>${bloqueIA(p)}<b>Mi revisión</b> (mirando la imagen)` +
     `<select id="r-estado">${OPCIONES.map(x => `<option${x === estadoDe(id) ? " selected" : ""}>${x}</option>`).join("")}</select>` +
     `<textarea id="r-nota" placeholder="Qué ves: pozas, suelo removido, camino, banco de arena, derrumbe...">${esc((revision[id] && revision[id].nota) || "")}</textarea>`;
   const guarda = () => { revision[id] = {estado: document.getElementById("r-estado").value, nota: document.getElementById("r-nota").value,
-    fecha: new Date().toISOString().slice(0, 10)}; guardar(); pintar(id); dibujarLista(); };
+    fecha: new Date().toISOString().slice(0, 10)}; guardar(); pintar(id); dibujarLista(); enviarEtiqueta(p, revision[id].estado); };
   document.getElementById("r-estado").onchange = guarda; document.getElementById("r-nota").oninput = guarda;
+  activarIA(p);
   document.querySelectorAll(".fila").forEach(x => x.classList.toggle("activa", x.dataset.id === id));
   const fila = document.querySelector(`.fila[data-id="${id}"]`); if (fila) fila.scrollIntoView({block: "nearest"});
+}
+
+// ---- Segunda opinion de Claude y envio de mi revision al banco de etiquetas (solo zonas de un analisis de bloque)
+const VER = {probable_mineria: ["Parece minería", "#c92a2a"], dudoso: ["Dudosa", "#f59f00"], probable_no_mineria: ["No parece minería", "#868e96"]};
+function cajaIA(o) {
+  const [txt, col] = VER[o.veredicto] || ["?", "#868e96"];
+  return `<span class="ver" style="background:${col}">${txt}</span> confianza ${esc(o.confianza)}<br>${esc(o.que_parece)}` +
+    `<ul>${(o.motivos || []).map(m => `<li>${esc(m)}</li>`).join("")}</ul>` +
+    (o.que_revisar ? `<div>Conviene: ${esc(o.que_revisar)}</div>` : "") + `<div class="fin">${esc(o.aviso)}</div>`;
+}
+function bloqueIA(p) {
+  if (tipoDe(p.id) !== "an" || !p.clave || !servidor) return "";
+  if (!servidor.ia) return `<div class="ia-caja">Segunda opinión de Claude: desactivada. Para usarla guarda tu clave de la API de Claude (ver 07_VISOR/LEEME.md) y reinicia el visor.</div>`;
+  return `<button class="ia-btn" id="b-ia">Pedir segunda opinión a Claude</button><div id="ia-res"></div>`;
+}
+function activarIA(p) {
+  const b = document.getElementById("b-ia"); if (!b) return;
+  const res = document.getElementById("ia-res");
+  const mostrar = r => { res.innerHTML = r.error ? `<div class="alerta">${esc(r.error)}</div>` : `<div class="ia-caja">${cajaIA(r)}</div>`; };
+  b.onclick = () => {
+    b.disabled = true; b.textContent = "Claude está mirando la imagen…";
+    fetch("/api/opinion", {method: "POST", body: JSON.stringify({clave: p.clave, id: p.id})}).then(r => r.json()).then(mostrar)
+      .catch(() => mostrar({error: "No se pudo conectar con el servidor del visor."})).finally(() => { b.disabled = false; b.textContent = "Pedir segunda opinión a Claude"; });
+  };
+}
+function enviarEtiqueta(p, estado) {
+  if (tipoDe(p.id) !== "an" || !p.clave || !servidor) return;
+  const e = {"Parece actividad minera": "mineria", "No parece actividad minera": "no_mineria", "No estoy seguro": "dudoso"}[estado];
+  if (!e) return;
+  fetch("/api/etiqueta", {method: "POST", body: JSON.stringify({clave: p.clave, id: p.id, etiqueta: e})}).catch(() => {});
 }
 
 // ---- Descargas (CSV con BOM para que Excel lea las tildes)

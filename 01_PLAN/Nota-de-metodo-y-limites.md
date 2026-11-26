@@ -1,4 +1,4 @@
-# Nota de método y límites del modelo (versión del 25-nov-2026)
+# Nota de método y límites del modelo (versión del 26-nov-2026)
 
 > [!warning] Lectura obligatoria antes de usar cualquier cifra en el deck
 > Esta nota dice qué se puede afirmar y qué no. Las cifras miden **coincidencia con etiquetas propuestas por Claude, sin verificación en campo**. No miden exactitud contra el terreno.
@@ -59,7 +59,7 @@ Se aplicaron tras la segunda revisión independiente (25-nov):
 Las 13 zonas de lectura visual (LV) son ejemplos de entrenamiento, sin puntaje, rotuladas "sin verificar". Dos miden más de 1.000 ha y probablemente agrupan varias áreas.
 
 ## 5b. Análisis de bloques en cualquier lugar (visor con servidor local)
-El visor permite dibujar un bloque (hasta 12 × 12 km) en cualquier lugar. El programa baja la imagen Sentinel-2 de ese bloque (mayo a septiembre 2026), calcula los mismos índices y la pendiente, corre el modelo guardado (`modelo_lgbm.txt`) y aplica los mismos filtros de la sección 5 (`nucleo_zonas.py`).
+El visor permite dibujar un bloque (hasta 30 × 30 km) en cualquier lugar. El programa baja la imagen Sentinel-2 de ese bloque (mayo a septiembre 2026), calcula los mismos índices y la pendiente, corre el modelo guardado (`modelo_lgbm.txt`) y aplica los mismos filtros de la sección 5 (`nucleo_zonas.py`).
 
 > [!warning] Fuera del norte de La Paz el modelo NO está validado
 > Se entrenó y se midió solo en Tipuani, Mapiri, Teoponte y Guanay. En otras regiones (por ejemplo la selva baja de Madre de Dios, con pozas grandes y terreno plano) no sabemos cuánto acierta, y la pendiente como atajo (sección 4) hace que encuentre mal la minería en terreno plano. Un resultado ahí solo sirve como **demostración de la herramienta**, no como evidencia de minería.
@@ -70,6 +70,38 @@ El visor permite dibujar un bloque (hasta 12 × 12 km) en cualquier lugar. El pr
 - Dos reglas del piloto (mediana de 7+ fotos limpias y "entorno con vegetación") eliminaban casi todo en la selva baja (nublada y con minas enormes). Fuera del piloto ahora solo **marcan** la zona como "confianza parcial" y el visor lo avisa; dentro del piloto siguen eliminando, y la lista del piloto no cambió (CSV idéntico). En el modo relajado también se unen pedazos separados por menos de unos 120 m.
 - La sensibilidad alta (puntaje mínimo 0,3 en vez de 0,5) es una opción de quien analiza, con el costo explicado en el visor.
 - Lo que el visor dice: "zonas con parecido a posible actividad minera (por verificar; registro AJAM aún no consultado)". Nunca "hay minería" ni "ilegal".
+
+## 5c. Modelo v2: entrenado con muchos lugares y con ayuda de IA (26-nov-2026)
+> [!warning] Qué cambió y qué no
+> La **lista de 30 zonas del piloto no cambia**: sigue saliendo del modelo v1 y de sus reglas estrictas. El modelo v2 se usa en el **análisis de bloques** del visor (cualquier lugar). Aun así, v2 sigue encontrando 26 de las 30 zonas del piloto (puntaje medio de 0,5 o más dentro de cada zona).
+
+**Por qué.** El modelo v1 solo conocía 9 minas de laderas del norte de La Paz y fallaba en terreno plano (Madre de Dios): marcaba poco de lo que era minería.
+
+**Qué se hizo** (`banco_bloques.py`, `paso10_reentrenar.py`, `paso10b_objetos_revision.py`):
+1. Se bajaron imágenes Sentinel-2 (misma receta) de **31 bloques de unos 11 km**: 12 con mucha minería (Madre de Dios, Puno, Pataz y tres del piloto) y 19 **sin minería** (ciudades, ríos con bancos de arena, pastizales, agricultura, valles).
+2. Segunda fuente de etiquetas, **independiente de las propuestas de Claude**: el mapa **MapBiomas Perú y Bolivia, clase 30 (Minería), 2023 y 2024** (CC BY-SA 4.0). Un píxel es minero solo si lo es en los dos años. MapBiomas es una clasificación automática de Landsat a 30 m, **no es verdad de campo**.
+3. Cuatro variables nuevas de **contexto** (textura del NDVI a 100 m; NDVI medio, fracción de agua y fracción de suelo sin vegetación a 300 m).
+4. **Revisión con IA de los desacuerdos:** con un modelo que no vio el bloque se buscaron manchas de más de 5 ha donde el modelo y MapBiomas no coinciden (80 casos). Claude (4 subagentes) las miró en tres vistas (color natural con contorno, de cerca y falso color) y las etiquetó. Resultado: de 56 marcas del modelo que MapBiomas no tenía, **37 eran falsos positivos reales** (ciudades, bancos de arena, roca), **7 parecen minería que MapBiomas no vio** y 12 quedaron dudosas; de 24 minas de MapBiomas que el modelo no marcó, 19 son minería (error del modelo) y 5 dudosas. Los "dudosos" no se usan para entrenar.
+
+**Cómo se midió.** Cada bloque se examina con un modelo que **no lo vio**, y el bloque de La Pampa nunca entra al entrenamiento de ningún modelo examinado. Se mide el producto final (las zonas que ve la persona, con las reglas relajadas de fuera del piloto) contra MapBiomas.
+
+| 11 bloques con más de 1.000 ha de minería en MapBiomas (media) | v1 | v2 (sin revisión IA) | v2 (con revisión IA) |
+|---|---|---|---|
+| Minería de MapBiomas cubierta por zonas | 39 % | 69 % | 66 % |
+| De lo marcado, % que MapBiomas también marca | 57 % | 64 % | 65 % |
+| Hectáreas marcadas en **bloques de control sin minería** (media de 19 bloques) | 2.630 | 1.528 | 1.043 |
+
+La Pampa (bloque que el modelo nunca vio): v1 cubre 54 % de la minería de MapBiomas; v2, 90 %. En los tres bloques del piloto: de 5 a 12 % (v1) a 41 a 73 % (v2).
+
+> [!danger] Lo que NO se puede decir
+> - "Exactitud" o "precisión contra el terreno": todo se mide contra MapBiomas (otra estimación) y contra la lectura de una IA, sin verificación en campo.
+> - Que el falso positivo esté resuelto: en **ciudades** (por ejemplo Cochabamba y el valle del Mantaro) y en **grandes ríos con bancos de arena** (Madre de Dios) sigue marcando cientos o miles de hectáreas cuando el modelo no vio ese tipo de lugar. Por eso cada zona de un bloque fuera del piloto lleva "confianza parcial" y el aviso del visor.
+> - Que lo que MapBiomas no marca sea "no minería": en La Pampa el modelo marca más hectáreas que MapBiomas (11.300 contra 6.500) y 26 % de lo marcado no está en MapBiomas; parte serán minas que MapBiomas no vio y parte falsos positivos. No se sabe sin verificar.
+> - Los números por bloque cambian bastante (hay bloques donde v2 no mejora); son pocos bloques.
+
+**Límites propios de este paso:** 12 bloques con minería, casi todos en Madre de Dios; en Pataz la cobertura sube poco (14 a 27 %) y en Puno baja (98 a 74 %), aunque con mucha más coincidencia con MapBiomas en lo marcado (23 a 59 %). Las etiquetas de la IA son una opinión sobre una imagen de 20 m; 80 casos revisados es poco. MapBiomas puede equivocarse en los bordes de las minas.
+
+**Segunda opinión en el visor.** Cada zona de un bloque tiene el botón "Pedir segunda opinión a Claude": se envían a la API de Claude tres recortes de la zona y los datos del modelo, y vuelve un veredicto (parece minería, dudosa, no parece), los motivos y qué comprobar. Necesita una clave de la API (`clave_api.txt`, fuera de git) y tiene un costo pequeño por zona. **No se probó contra la API real** (no había clave); se probó con una respuesta simulada. La revisión que hace la persona en el visor queda guardada en `04_DATOS/etiquetas/revisiones_visor.jsonl` y es la etiqueta de más valor para el próximo reentrenamiento.
 
 ## 6. Reproducibilidad
 - Semilla fija (42), versiones y fechas en `04_DATOS/resultados/modelo_info.json` y `04_DATOS/imagenes/compuesto/metadata.json`.

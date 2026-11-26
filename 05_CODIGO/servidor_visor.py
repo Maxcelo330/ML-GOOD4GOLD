@@ -26,6 +26,7 @@ from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))   # (con 'python -I' la carpeta del script no se agrega sola)
 import analisis_bloque as ab  # noqa: E402
+import opinion_ia as oi  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parents[1]
 VISOR = RAIZ / "07_VISOR"
@@ -37,6 +38,33 @@ PESOS = [0.04, 0.50, 0.12, 0.10, 0.14, 0.10]
 
 trabajos = {}                   # id -> estado del analisis
 candado = threading.Lock()
+
+
+ETIQUETAS = RAIZ / "04_DATOS" / "etiquetas" / "revisiones_visor.jsonl"
+
+
+def guardar_etiqueta(clave, id_zona, etiqueta):
+    """Guarda la decision de una persona sobre una zona (mineria / no_mineria / dudoso) junto con su geometria.
+
+    Es la etiqueta de mas valor: paso10_reentrenar.py la usa con prioridad sobre la de la IA y la de MapBiomas."""
+    import re
+    if etiqueta not in ("mineria", "no_mineria", "dudoso") or not re.fullmatch(r"[0-9a-f]{12}", clave or ""):
+        raise ab.ErrorAnalisis("Etiqueta no valida.")
+    ruta = ab.SALIDA / f"{clave}.json"
+    if not ruta.exists():
+        raise ab.ErrorAnalisis("No se encuentra ese analisis.")
+    res = json.loads(ruta.read_text(encoding="utf-8"))
+    f = next((x for x in res["zonas"]["features"] if x["properties"]["id"] == id_zona), None)
+    if f is None:
+        raise ab.ErrorAnalisis("No se encuentra esa zona.")
+    op = oi.OPINIONES / f"{clave}_{id_zona}.json"
+    fila = {"fecha": time.strftime("%Y-%m-%d %H:%M"), "clave": clave, "clave_img": res["resumen"].get("clave_img"), "id": id_zona, "etiqueta": etiqueta,
+            "origen": "humano (visor)", "puntaje_modelo": f["properties"]["puntaje_modelo"], "geometria": f["geometry"],
+            "opinion_ia": json.loads(op.read_text(encoding="utf-8")).get("veredicto") if op.exists() else None}
+    ETIQUETAS.parent.mkdir(parents=True, exist_ok=True)
+    with candado, open(ETIQUETAS, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(fila, ensure_ascii=False) + "\n")
+    return {"ok": True}
 
 
 def correr(id_):
@@ -73,7 +101,8 @@ class Manejador(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         if url.path == "/api/salud":
             return self._json(200, {"ok": True, "modelo": ab.MODELO.exists(), "etapas": ab.ETAPAS,
-                                    "max_lado_km": ab.MAX_LADO_KM, "min_lado_km": ab.MIN_LADO_KM})
+                                    "max_lado_km": ab.MAX_LADO_KM, "min_lado_km": ab.MIN_LADO_KM,
+                                    "ia": oi.disponible(), "modelo_ia": oi.MODELO_IA})
         if url.path == "/api/estado":
             id_ = parse_qs(url.query).get("id", [""])[0]
             e = trabajos.get(id_)
@@ -97,8 +126,31 @@ class Manejador(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(datos)
 
+    def _cuerpo(self):
+        n = int(self.headers.get("Content-Length", 0))
+        return json.loads(self.rfile.read(min(n, 10_000)))
+
     def do_POST(self):
-        if urlparse(self.path).path != "/api/analizar":
+        ruta = urlparse(self.path).path
+        if ruta == "/api/opinion":      # segunda opinion de Claude sobre una zona (tarda ~10 s)
+            try:
+                c = self._cuerpo()
+                return self._json(200, oi.pedir_opinion(c.get("clave"), c.get("id")))
+            except oi.ErrorOpinion as e:
+                return self._json(400, {"error": str(e)})
+            except Exception:  # noqa: BLE001
+                traceback.print_exc()
+                return self._json(500, {"error": "Fallo inesperado al pedir la opinion. Revisa la consola del servidor."})
+        if ruta == "/api/etiqueta":     # la revision de la persona sobre una zona: queda guardada para reentrenar el modelo
+            try:
+                c = self._cuerpo()
+                return self._json(200, guardar_etiqueta(c.get("clave"), c.get("id"), c.get("etiqueta")))
+            except ab.ErrorAnalisis as e:
+                return self._json(400, {"error": str(e)})
+            except Exception:  # noqa: BLE001
+                traceback.print_exc()
+                return self._json(500, {"error": "No se pudo guardar la etiqueta."})
+        if ruta != "/api/analizar":
             return self._json(404, {"error": "Ruta desconocida."})
         try:
             n = int(self.headers.get("Content-Length", 0))

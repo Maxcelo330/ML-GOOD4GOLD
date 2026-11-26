@@ -15,6 +15,9 @@
 # Del resultado se conservan el MODELO guardado (530 KB) y las metricas: bastan para analizar bloques desde otro equipo.
 # La lista de zonas del piloto (detecciones*) NO se versiona: son zonas sin verificar y el repo es publico (D-002).
 !04_DATOS/resultados/modelo_lgbm.txt
+!04_DATOS/resultados/modelo_lgbm_v1.txt
+!04_DATOS/resultados/modelo_lgbm_v2.txt
+!04_DATOS/resultados/modelo_v2_info.json
 !04_DATOS/resultados/modelo_info.json
 !04_DATOS/resultados/metricas.csv
 !04_DATOS/resultados/metricas_por_parte.csv
@@ -57,3 +60,13 @@ Thumbs.db
 07_VISOR/visor.html
 04_DATOS/referencia/osm_rios_poblados_crudo.json
 04_DATOS/analisis_bloques/
+
+# Banco de bloques, muestras de entrenamiento, opiniones de IA y revisiones: pesados o sin verificar (D-002); se regeneran o quedan en local
+04_DATOS/banco_bloques/
+04_DATOS/entrenamiento/
+04_DATOS/opiniones_ia/
+04_DATOS/etiquetas/revisiones_visor.jsonl
+04_DATOS/etiquetas/revision_ia.csv
+# Clave de la API de Claude (nunca a git)
+clave_api.txt
+.env
