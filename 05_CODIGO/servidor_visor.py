@@ -30,6 +30,7 @@ import acceso  # noqa: E402
 import analisis_bloque as ab  # noqa: E402
 import modelo_activo as ma  # noqa: E402
 import opinion_ia as oi  # noqa: E402
+import paquete_app as pa  # noqa: E402
 import recorte_zona as rz  # noqa: E402
 import sincronizar as sy  # noqa: E402
 import zonas_confirmadas as zc  # noqa: E402
@@ -38,7 +39,8 @@ RAIZ = Path(__file__).resolve().parents[1]
 VISOR = RAIZ / "07_VISOR"
 PUERTO = int(os.environ.get("G4G_PUERTO", "8765"))    # (otro puerto solo para pruebas)
 TIPOS = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
-         ".png": "image/png", ".json": "application/json; charset=utf-8", ".md": "text/plain; charset=utf-8"}
+         ".png": "image/png", ".json": "application/json; charset=utf-8", ".md": "text/plain; charset=utf-8",
+         ".woff2": "font/woff2", ".svg": "image/svg+xml"}
 # Peso de cada etapa en la barra de avance total (suman 1): la descarga es lo que mas tarda
 PESOS = [0.04, 0.50, 0.12, 0.10, 0.14, 0.10]
 
@@ -250,6 +252,22 @@ class Manejador(BaseHTTPRequestHandler):
         if url.path == "/api/confirmadas":    # zonas marcadas "Parece actividad minera" (GeoJSON para la app)
             zc.construir()
             return self._json(200, zc.leer())
+        if url.path == "/api/paquete_app.zip":   # TODO para la app en un solo ZIP (geojson + excel + csv + leeme); ver paquete_app.py
+            try:
+                r = pa.construir()
+            except Exception:  # noqa: BLE001
+                traceback.print_exc()
+                return self._json(500, {"error": "No se pudo armar el paquete para la app. Revisa la ventana negra del visor."})
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Disposition", 'attachment; filename="zonas_para_la_app.zip"')
+            self.send_header("Content-Length", str(len(r["zip"])))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Zonas", str(r["n"]))
+            self._cors()
+            self.end_headers()
+            self.wfile.write(r["zip"])
+            return
         if url.path == "/api/respaldo":       # estado del respaldo cifrado del repo (no lo abre)
             return self._json(200, sy.estado())
         if url.path == "/api/historial":      # bloques ya analizados (para volver a abrirlos despues de cerrar el visor)

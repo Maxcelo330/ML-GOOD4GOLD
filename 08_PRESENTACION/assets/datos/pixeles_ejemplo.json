@@ -1,0 +1,135 @@
+{
+ "variables": [
+  "B02",
+  "B03",
+  "B04",
+  "B08",
+  "B11",
+  "B12",
+  "ndvi",
+  "ndwi",
+  "bsi",
+  "pendiente",
+  "ndvi_textura_100m",
+  "ndvi_media_300m",
+  "frac_agua_300m",
+  "frac_pelado_300m"
+ ],
+ "pixeles": [
+  {
+   "tipo": "bosque",
+   "fila": 1338,
+   "col": 1149,
+   "puntaje": 0,
+   "variables": {
+    "B02": 0.032,
+    "B03": 0.043,
+    "B04": 0.024,
+    "B08": 0.322,
+    "B11": 0.186,
+    "B12": 0.084,
+    "ndvi": 0.863,
+    "ndwi": -0.767,
+    "bsi": -0.255,
+    "pendiente": 6.539,
+    "ndvi_textura_100m": 0.024,
+    "ndvi_media_300m": 0.833,
+    "frac_agua_300m": 0.0,
+    "frac_pelado_300m": 0.0
+   },
+   "miniatura": "real/px_bosque.png"
+  },
+  {
+   "tipo": "suelo_removido",
+   "fila": 1109,
+   "col": 909,
+   "puntaje": 97,
+   "variables": {
+    "B02": 0.143,
+    "B03": 0.222,
+    "B04": 0.284,
+    "B08": 0.305,
+    "B11": 0.359,
+    "B12": 0.299,
+    "ndvi": 0.035,
+    "ndwi": -0.159,
+    "bsi": 0.178,
+    "pendiente": 5.582,
+    "ndvi_textura_100m": 0.104,
+    "ndvi_media_300m": 0.081,
+    "frac_agua_300m": 0.111,
+    "frac_pelado_300m": 0.88
+   },
+   "miniatura": "real/px_suelo_removido.png"
+  },
+  {
+   "tipo": "rio",
+   "fila": 881,
+   "col": 732,
+   "puntaje": 76,
+   "variables": {
+    "B02": 0.048,
+    "B03": 0.068,
+    "B04": 0.062,
+    "B08": 0.024,
+    "B11": 0.027,
+    "B12": 0.023,
+    "ndvi": -0.442,
+    "ndwi": 0.474,
+    "bsi": 0.111,
+    "pendiente": 2.539,
+    "ndvi_textura_100m": 0.314,
+    "ndvi_media_300m": 0.161,
+    "frac_agua_300m": 0.258,
+    "frac_pelado_300m": 0.693
+   },
+   "miniatura": "real/px_rio.png"
+  },
+  {
+   "tipo": "banco_de_arena",
+   "fila": 1086,
+   "col": 763,
+   "puntaje": 85,
+   "variables": {
+    "B02": 0.134,
+    "B03": 0.168,
+    "B04": 0.186,
+    "B08": 0.194,
+    "B11": 0.222,
+    "B12": 0.193,
+    "ndvi": 0.021,
+    "ndwi": -0.071,
+    "bsi": 0.108,
+    "pendiente": 1.082,
+    "ndvi_textura_100m": 0.178,
+    "ndvi_media_300m": 0.246,
+    "frac_agua_300m": 0.111,
+    "frac_pelado_300m": 0.627
+   },
+   "miniatura": "real/px_banco_de_arena.png"
+  },
+  {
+   "tipo": "pastizal",
+   "fila": 1103,
+   "col": 345,
+   "puntaje": 1,
+   "variables": {
+    "B02": 0.13,
+    "B03": 0.124,
+    "B04": 0.104,
+    "B08": 0.338,
+    "B11": 0.193,
+    "B12": 0.107,
+    "ndvi": 0.529,
+    "ndwi": -0.464,
+    "bsi": -0.223,
+    "pendiente": 14.68,
+    "ndvi_textura_100m": 0.076,
+    "ndvi_media_300m": 0.661,
+    "frac_agua_300m": 0.0,
+    "frac_pelado_300m": 0.0
+   },
+   "miniatura": "real/px_pastizal.png"
+  }
+ ]
+}

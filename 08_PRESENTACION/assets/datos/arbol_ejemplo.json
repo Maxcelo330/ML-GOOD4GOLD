@@ -1,0 +1,112 @@
+{
+ "n_arboles": 300,
+ "arboles": [
+  {
+   "variable": "frac_pelado_300m",
+   "umbral": 0.089,
+   "si": {
+    "variable": "frac_pelado_300m",
+    "umbral": 0.022,
+    "si": {
+     "hoja": 0.056
+    },
+    "no": {
+     "hoja": 0.1
+    }
+   },
+   "no": {
+    "variable": "frac_agua_300m",
+    "umbral": 0.338,
+    "si": {
+     "variable": "frac_agua_300m",
+     "umbral": 0.004,
+     "si": {
+      "hoja": null
+     },
+     "no": {
+      "hoja": null
+     }
+    },
+    "no": {
+     "variable": "B03",
+     "umbral": 0.18,
+     "si": {
+      "hoja": null
+     },
+     "no": {
+      "hoja": 0.231
+     }
+    }
+   }
+  },
+  {
+   "variable": "ndvi",
+   "umbral": 0.451,
+   "si": {
+    "variable": "pendiente",
+    "umbral": 0.55,
+    "si": {
+     "variable": "frac_agua_300m",
+     "umbral": 0.378,
+     "si": {
+      "hoja": null
+     },
+     "no": {
+      "hoja": -0.094
+     }
+    },
+    "no": {
+     "variable": "frac_agua_300m",
+     "umbral": 0.0,
+     "si": {
+      "hoja": null
+     },
+     "no": {
+      "hoja": null
+     }
+    }
+   },
+   "no": {
+    "variable": "frac_pelado_300m",
+    "umbral": 0.209,
+    "si": {
+     "hoja": -0.096
+    },
+    "no": {
+     "hoja": -0.057
+    }
+   }
+  },
+  {
+   "variable": "ndvi",
+   "umbral": 0.451,
+   "si": {
+    "variable": "ndvi_textura_100m",
+    "umbral": 0.133,
+    "si": {
+     "variable": "B04",
+     "umbral": 0.207,
+     "si": {
+      "hoja": null
+     },
+     "no": {
+      "hoja": null
+     }
+    },
+    "no": {
+     "variable": "frac_pelado_300m",
+     "umbral": 0.071,
+     "si": {
+      "hoja": -0.037
+     },
+     "no": {
+      "hoja": null
+     }
+    }
+   },
+   "no": {
+    "hoja": -0.083
+   }
+  }
+ ]
+}

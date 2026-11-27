@@ -79,4 +79,6 @@ acceso_ia.txt
 04_DATOS/etiquetas/zonas_confirmadas.geojson
 04_DATOS/etiquetas/revisiones_zonas.json
 04_DATOS/resultados/zonas_confirmadas_plataforma.csv
+# Paquete para la app (zonas revisadas en geojson/excel/csv/zip): sensible, se regenera con un boton del visor
+04_DATOS/para_la_app/
 clave_respaldo.txt

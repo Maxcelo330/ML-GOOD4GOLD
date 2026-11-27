@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Codificador de video (H.264 en MP4)</title></head>
+<body>
+<script>
+/* Pagina auxiliar para grabar el video: recibe cuadros JPEG (base64), los codifica a H.264 con WebCodecs de Chrome y arma un MP4 con
+   un empaquetador propio (sin instalar nada). Uso desde herramientas/grabar.mjs. */
+const C = window.Codificador = {
+  async iniciar(ancho, alto, fps, bitrate) {
+    this.ancho = ancho; this.alto = alto; this.fps = fps; this.muestras = []; this.claves = []; this.n = 0; this.desc = null; this.error = null;
+    this.canvas = new OffscreenCanvas(ancho, alto); this.ctx = this.canvas.getContext('2d', { alpha: false });
+    const cfg = { codec: 'avc1.64002A', width: ancho, height: alto, bitrate, framerate: fps, latencyMode: 'quality', avc: { format: 'avc' }, hardwareAcceleration: 'no-preference' };
+    const s = await VideoEncoder.isConfigSupported(cfg);
+    if (!s.supported) return { ok: false, motivo: 'H.264 no soportado' };
+    this.enc = new VideoEncoder({
+      output: (chunk, meta) => {
+        if (meta && meta.decoderConfig && meta.decoderConfig.description && !this.desc) this.desc = new Uint8Array(meta.decoderConfig.description);
+        const d = new Uint8Array(chunk.byteLength); chunk.copyTo(d);
+        this.muestras.push(d); if (chunk.type === 'key') this.claves.push(this.muestras.length);
+      },
+      error: e => { this.error = String(e); },
+    });
+    this.enc.configure(cfg);
+    return { ok: true };
+  },
+  async empujar(b64) {                                  // un cuadro JPEG en base64
+    if (this.error) return { ok: false, motivo: this.error };
+    const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const bmp = await createImageBitmap(new Blob([bin], { type: 'image/jpeg' }));
+    this.ctx.drawImage(bmp, 0, 0, this.ancho, this.alto); bmp.close();
+    const f = new VideoFrame(this.canvas, { timestamp: Math.round(this.n * 1e6 / this.fps) });
+    this.enc.encode(f, { keyFrame: this.n % (this.fps * 2) === 0 }); f.close(); this.n++;
+    while (this.enc.encodeQueueSize > 6) await new Promise(r => setTimeout(r, 2));        // no acumular cuadros sin codificar
+    return { ok: true, n: this.n };
+  },
+  async terminar() {
+    await this.enc.flush(); this.enc.close();
+    const mp4 = armarMP4(this); this.mp4 = mp4; return { ok: true, bytes: mp4.length, cuadros: this.n };
+  },
+  parte(i, tam) { const a = this.mp4.subarray(i * tam, (i + 1) * tam); let s = ''; for (let k = 0; k < a.length; k += 0x8000) s += String.fromCharCode.apply(null, a.subarray(k, k + 0x8000)); return btoa(s); },
+};
+
+// ---- empaquetador MP4 minimo (un video H.264, todas las muestras en un solo bloque; moov al principio para que se pueda ver mientras baja)
+function u32(n) { return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255]; }
+function u16(n) { return [(n >>> 8) & 255, n & 255]; }
+function str(s) { return [...s].map(c => c.charCodeAt(0)); }
+function cat(...partes) { let t = 0; partes.forEach(p => t += p.length); const o = new Uint8Array(t); let k = 0; partes.forEach(p => { o.set(p, k); k += p.length; }); return o; }
+function caja(tipo, ...partes) { const c = cat(...partes.map(p => (p instanceof Uint8Array ? p : Uint8Array.from(p)))); return cat(Uint8Array.from([...u32(c.length + 8), ...str(tipo)]), c); }
+function armarMP4(E) {
+  const N = E.muestras.length, TS = E.fps * 1000, DUR = N * 1000, W = E.ancho, H = E.alto;
+  const matriz = [...u32(0x00010000), ...u32(0), ...u32(0), ...u32(0), ...u32(0x00010000), ...u32(0), ...u32(0), ...u32(0), ...u32(0x40000000)];
+  const ftyp = caja('ftyp', str('isom'), u32(512), str('isom'), str('iso2'), str('avc1'), str('mp41'));
+  const tamMdat = E.muestras.reduce((s, m) => s + m.length, 0);
+  const moov = offset => caja('moov',
+    caja('mvhd', u32(0), u32(0), u32(0), u32(TS), u32(DUR), u32(0x00010000), u16(0x0100), u16(0), u32(0), u32(0), matriz, new Array(24).fill(0), u32(2)),
+    caja('trak',
+      caja('tkhd', u32(3), u32(0), u32(0), u32(1), u32(0), u32(DUR), u32(0), u32(0), u16(0), u16(0), u16(0), u16(0), matriz, u32(W << 16), u32(H << 16)),
+      caja('mdia',
+        caja('mdhd', u32(0), u32(0), u32(0), u32(TS), u32(DUR), u16(0x55c4), u16(0)),
+        caja('hdlr', u32(0), u32(0), str('vide'), u32(0), u32(0), u32(0), [...str('VideoHandler'), 0]),
+        caja('minf',
+          caja('vmhd', u32(1), u16(0), u16(0), u16(0), u16(0)),
+          caja('dinf', caja('dref', u32(0), u32(1), caja('url ', u32(1)))),
+          caja('stbl',
+            caja('stsd', u32(0), u32(1), caja('avc1', new Array(6).fill(0), u16(1), u16(0), u16(0), u32(0), u32(0), u32(0), u16(W), u16(H), u32(0x00480000), u32(0x00480000), u32(0), u16(1),
+              new Array(32).fill(0), u16(0x0018), u16(0xffff), caja('avcC', E.desc))),
+            caja('stts', u32(0), u32(1), u32(N), u32(1000)),
+            caja('stss', u32(0), u32(E.claves.length), ...E.claves.map(k => u32(k))),
+            caja('stsc', u32(0), u32(1), u32(1), u32(N), u32(1)),
+            caja('stsz', u32(0), u32(0), u32(N), ...E.muestras.map(m => u32(m.length))),
+            caja('stco', u32(0), u32(1), u32(offset)))))));
+  const tamMoov = moov(0).length;
+  const offset = ftyp.length + tamMoov + 8;
+  const mdatCab = Uint8Array.from([...u32(tamMdat + 8), ...str('mdat')]);
+  return cat(ftyp, moov(offset), mdatCab, ...E.muestras);
+}
+</script>
+</body></html>

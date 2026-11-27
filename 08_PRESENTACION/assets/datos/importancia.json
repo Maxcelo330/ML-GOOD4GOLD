@@ -1,0 +1,58 @@
+[
+ {
+  "variable": "frac_pelado_300m",
+  "peso": 0.155
+ },
+ {
+  "variable": "frac_agua_300m",
+  "peso": 0.148
+ },
+ {
+  "variable": "ndvi",
+  "peso": 0.123
+ },
+ {
+  "variable": "ndwi",
+  "peso": 0.123
+ },
+ {
+  "variable": "pendiente",
+  "peso": 0.098
+ },
+ {
+  "variable": "ndvi_media_300m",
+  "peso": 0.063
+ },
+ {
+  "variable": "ndvi_textura_100m",
+  "peso": 0.062
+ },
+ {
+  "variable": "B12",
+  "peso": 0.056
+ },
+ {
+  "variable": "B03",
+  "peso": 0.04
+ },
+ {
+  "variable": "B04",
+  "peso": 0.036
+ },
+ {
+  "variable": "B02",
+  "peso": 0.032
+ },
+ {
+  "variable": "B11",
+  "peso": 0.025
+ },
+ {
+  "variable": "bsi",
+  "peso": 0.023
+ },
+ {
+  "variable": "B08",
+  "peso": 0.015
+ }
+]

@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Zonas de posible actividad minera (uso interno)</title>
+<title>Zonas de posible actividad minera (uso interno) · aurum80</title>
 <link rel="stylesheet" href="lib/leaflet/leaflet.css">
+<link rel="stylesheet" href="lib/fuentes/fuentes.css">
 <style>
   :root { --borde:#d5d9e0; --fondo:#f6f7f9; --texto:#1d2330; --suave:#5d6677; --acento:#5f3dc4; --acento-suave:#ece8fb; --naranja:#e8590c; }
   * { box-sizing: border-box; }
@@ -148,13 +149,56 @@
     body.dibujando #tarjeta p { display:none; }          /* mientras se dibuja, la tarjeta se achica para no tapar el mapa */
   }
   @media (prefers-reduced-motion: reduce) { * { animation-duration:.01ms !important; animation-iteration-count:1 !important; } }
+
+  /* ==== Identidad visual alineada con la app de registro: papel calido, tinta, un acento dorado y las tipografias del INE.
+     Los colores con significado NO cambian: violeta = modelo (puntaje, zonas, bloque), naranja = todo lo que usa IA, verde/ambar/rojo = estados. ==== */
+  :root { --borde:#DCD5C7; --linea2:#EBE5D9; --fondo:#F3EFE7; --superficie:#FCFAF6; --texto:#1D1B18; --suave:#6A655B; --oro:#B07D14; --oro-suave:#F3E7C6;
+    --nav:#1F1D1A; --nav2:#2B2824; --acento-suave:#EFEAFB;
+    --f-titulo:"Montserrat","Segoe UI",system-ui,sans-serif; --f-texto:"Roboto","Segoe UI",system-ui,-apple-system,Arial,sans-serif; --f-cond:"Roboto Condensed","Arial Narrow","Roboto",sans-serif; }
+  html, body { font:400 14px/1.45 var(--f-texto); -webkit-font-smoothing:antialiased; }
+  :focus-visible { outline:2px solid #1F4E9C; outline-offset:2px; }
+  #panel { background:var(--fondo); border-right:1px solid #000; }
+  header { background:var(--nav); color:#F6F1E6; border-bottom:3px solid var(--oro); padding:14px 16px 12px; }
+  .marca { display:flex; gap:12px; align-items:center; margin-bottom:10px; }
+  .marca-sello { width:38px; height:38px; flex:none; display:grid; place-items:center; background:var(--oro); color:#1F1D1A; font:700 14px var(--f-titulo); letter-spacing:.2px; }
+  header h1.marca-nombre { font:700 14.5px/1.2 var(--f-titulo); letter-spacing:-.1px; color:#F6F1E6; margin:0; }
+  .marca-eti { font-size:11.5px; color:#A8A295; margin-top:2px; }
+  .aviso { background:#FBEFD0; border:1px solid #E2C777; border-radius:4px; color:#6b4200; }
+  .bloque { background:var(--superficie); border-bottom:1px solid var(--borde); }
+  select, textarea, input[type=text] { border-radius:4px; border-color:#B9B1A1; background:#fff; }
+  button { border:1px solid #4F4B43; background:var(--superficie); border-radius:4px; font-weight:600; }
+  button:hover { background:#EFE9DC; }
+  button.primario { background:var(--texto); border-color:var(--texto); color:#fff; } button.primario:hover { background:#38342E; }
+  button:disabled { opacity:.5; }
+  #lista { background:var(--superficie); }
+  .fila { background:var(--superficie); border-bottom:1px solid var(--linea2); } .fila:hover { background:#EFE9DC; } .fila.activa { background:var(--oro-suave); box-shadow:inset 3px 0 0 var(--oro); }
+  .fila .id { font-family:var(--f-cond); font-weight:700; letter-spacing:.02em; }
+  .estado { border-radius:2px; background:#EFE9DC; font:700 10.5px var(--f-cond); letter-spacing:.05em; text-transform:uppercase; }
+  #ficha { background:var(--superficie); border-top:2px solid var(--texto); }
+  #ficha h2, #tarjeta h3, #acceso h3, #cmp-cab h3 { font-family:var(--f-titulo); font-weight:700; letter-spacing:-.1px; }
+  #ficha dt { font-family:var(--f-cond); font-size:12px; letter-spacing:.05em; text-transform:uppercase; }
+  .pie { background:var(--superficie); border-top:1px solid var(--borde); }
+  #tarjeta { background:rgba(252,250,246,.98); border-radius:4px; border-top:3px solid var(--oro); box-shadow:0 8px 28px rgba(29,27,24,.25); }
+  .grande div { background:var(--superficie); border:1px solid var(--borde); border-radius:4px; }
+  .grande b { font-family:var(--f-cond); color:var(--texto); font-size:28px; }
+  .grande span { font-family:var(--f-cond); letter-spacing:.06em; text-transform:uppercase; }
+  .cmp-btn { background:var(--superficie); border:1px solid var(--acento); color:#3b2a8f; border-radius:4px; }
+  .ia-btn { border-radius:4px; } .ia-caja { border-radius:4px; } .alerta, .error { border-radius:4px; }
+  #ia-panel > summary, #ia-panel h4, .bloque > b { font-family:var(--f-cond); letter-spacing:.06em; text-transform:uppercase; font-size:12.5px; }
+  .hist-fila { border-radius:4px; background:var(--superficie); } .hist-fila:hover { background:var(--oro-suave); }
+  #acceso .caja, #cmp-caja { border-radius:4px; background:var(--superficie); }
+  #cmp-cab { background:var(--nav); color:#F6F1E6; border-bottom:3px solid var(--oro); } #cmp-cab h3 { color:#F6F1E6; } #cmp-cab button { color:var(--texto); }
+  .pbar .b, .barra { border-radius:2px; } .cmp-eti { border-radius:2px; font-family:var(--f-cond); letter-spacing:.04em; }
+  .leaflet-control-layers-toggle { text-decoration:none !important; } .leaflet-control-layers-toggle::after { font:700 12px var(--f-cond); letter-spacing:.05em; text-transform:uppercase; }
+  .leaflet-bar, .leaflet-control-layers, .leaflet-bar a:first-child, .leaflet-bar a:last-child { border-radius:4px; }
+  @media (max-width:760px) { .marca-sello { width:30px; height:30px; font-size:12px; } .marca-eti { display:none; } .marca { margin-bottom:6px; } header { padding:8px 12px 8px; } }
 </style>
 </head>
 <body>
 <div id="app">
   <aside id="panel">
     <header>
-      <h1>Zonas de posible actividad minera</h1>
+      <div class="marca"><div class="marca-sello" aria-hidden="true">a80</div><div><h1 class="marca-nombre">Zonas de posible actividad minera</h1><div class="marca-eti">Detector con imágenes satelitales · equipo aurum80</div></div></div>
       <div class="aviso"><b>Lista para revisar, no detecciones confirmadas.</b> Posible actividad minera (por verificar; registro AJAM aún no consultado). La imagen no dice si es legal ni si hay mercurio. Uso interno.</div>
     </header>
     <div class="bloque">
@@ -412,8 +456,23 @@ function montarConfirmadas() {
   const el = document.getElementById("conf"); if (!el) return;
   const n = Object.values(revision).filter(r => r.estado === "Parece actividad minera").length;
   el.innerHTML = `<b style="font-size:12.5px">Zonas que sí parecen minería (mi revisión): ${n}</b>
-    <div class="ia-fila"><button id="b-conf">Descargar para la app (GeoJSON)</button></div>
-    <div class="mini"><small>Se guardan en tu equipo (<b>04_DATOS/etiquetas/zonas_confirmadas.geojson</b>) cada vez que revisas; ese archivo se carga en la sección "Detecciones revisadas" de la app.</small></div>`;
+    <div class="ia-fila"><button class="primario" id="b-paq">Preparar paquete para la app (ZIP)</button><button id="b-conf" title="Solo el mapa de las zonas">Solo GeoJSON</button></div>
+    <div class="mini" id="paq-msg"><small>El ZIP trae el mapa (GeoJSON) para "Detecciones revisadas", un Excel con las columnas de la app para quien ingresa datos, un CSV y un LEEME con los pasos. También queda en <b>04_DATOS/para_la_app</b>.</small></div>`;
+  document.getElementById("b-paq").onclick = async () => {
+    const b = document.getElementById("b-paq"), msg = document.getElementById("paq-msg");
+    b.disabled = true; b.textContent = "Preparando…";
+    try {
+      await sincronizarRevisiones(true);
+      const r = await api("/api/paquete_app.zip");
+      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || "No se pudo conectar con el servidor."); }
+      const nz = Number(r.headers.get("X-Zonas") || 0);
+      if (!nz) { msg.innerHTML = `<div class="alerta">Aún no hay zonas marcadas "Parece actividad minera". Revisa algunas zonas y vuelve a pulsar.</div>`; return; }
+      const a = document.createElement("a"); a.href = URL.createObjectURL(await r.blob()); a.download = "zonas_para_la_app.zip"; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      msg.innerHTML = `<small><b>Listo: ${nz} zona${nz === 1 ? "" : "s"}.</b> Abre el ZIP y sigue el LEEME: en la app, Municipio, "Detecciones revisadas", "Cargar archivo de zonas".</small>`;
+    } catch (e) { msg.innerHTML = `<div class="alerta">${esc(e.message)}</div>`; }
+    finally { b.disabled = false; b.textContent = "Preparar paquete para la app (ZIP)"; }
+  };
   document.getElementById("b-conf").onclick = async () => {
     await sincronizarRevisiones(true);
     const r = await api("/api/confirmadas").then(x => x.json()).catch(() => ({error: "No se pudo conectar con el servidor."}));

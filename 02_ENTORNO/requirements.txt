@@ -1,0 +1,18 @@
+# Alternativa con pip (para reparar un entorno al que le falta algo). Lo normal es el entorno conda: ver environment.yml
+# Lo usa EJECUTAR-VISOR.bat solo si el diagnostico detecta paquetes faltantes y la persona acepta.
+numpy
+pandas
+geopandas
+shapely
+pyproj
+rasterio
+scipy
+scikit-learn
+lightgbm
+requests
+pillow
+matplotlib
+pystac-client
+planetary-computer
+stackstac
+openpyxl

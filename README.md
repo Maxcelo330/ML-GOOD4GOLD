@@ -1,6 +1,13 @@
 # QGIS + Machine Learning: detección de actividad minera (zona piloto norte de La Paz)
 
-Proyecto de la decisión D-003 del hackathon Gold4Good (desafío ORO-4.2). Esta carpeta reúne todo lo necesario para trabajar y aprender paso a paso.
+Proyecto del equipo **aurum80** (decisión D-003 del hackathon Gold4Good, desafío ORO-4.2; el proyecto aún no tiene nombre propio). Esta carpeta reúne todo lo necesario para trabajar y aprender paso a paso. Es la mitad "modelo" de un sistema de dos partes: este repo mira imágenes de satélite y propone zonas por verificar; el repo de la app (`Good4gold`) las muestra a los funcionarios y recibe denuncias de la ciudadanía.
+
+## Empezar sin saber nada (3 pasos)
+1. **Haz doble clic en `EJECUTAR-VISOR.bat`.** Si falta Python, el programa te pregunta y lo instala solo (pide internet y tarda unos 15 minutos la primera vez; solo para tu usuario, sin permisos de administrador).
+2. **Dibuja un bloque en el mapa** y pulsa "Analizar". El modelo marca zonas de posible actividad minera. Toca una zona y marca "Parece / No parece actividad minera".
+3. **Pulsa "Preparar paquete para la app (ZIP)".** Baja un solo archivo con todo lo que la app necesita y un LEEME con los pasos (ver `CONTRATO-DATOS.md`).
+
+Para solo revisar que el equipo esté bien, sin abrir nada: `EJECUTAR-VISOR.bat /verificar`.
 
 ## Contenido
 | Carpeta | Qué hay |
